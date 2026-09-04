@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/hero-search-and-scanbar.css">
   <link rel="stylesheet" href="css/ledger-rows.css">
   <link rel="stylesheet" href="css/apps-and-leftovers.css">
+  <link rel="stylesheet" href="css/duplicate-groups.css">
   <link rel="stylesheet" href="css/startup-entries.css">
   <link rel="stylesheet" href="css/storage-history.css">
   <link rel="stylesheet" href="css/dialog-and-toast.css">
@@ -83,6 +84,14 @@
       <button class="tab" role="tab" data-tab="leftovers" aria-selected="false">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5z"/><path d="M6 9.5h4" stroke-dasharray="1.5 1.5"/></svg>
         <span data-i18n="tab.leftovers">Thư mục thừa</span><b class="tab__badge" id="badge-leftovers" hidden></b>
+      </button>
+      <button class="tab" role="tab" data-tab="files" aria-selected="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 2h5L12.5 6v8a0 0 0 0 1 0 0h-9z"/><path d="M8.5 2v4h4"/></svg>
+        <span data-i18n="tab.files">File lớn</span><b class="tab__badge" id="badge-files" hidden></b>
+      </button>
+      <button class="tab" role="tab" data-tab="dupes" aria-selected="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5"/><path d="M6 12.5V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5"/></svg>
+        <span data-i18n="tab.dupes">File trùng</span><b class="tab__badge" id="badge-dupes" hidden></b>
       </button>
       <button class="tab" role="tab" data-tab="startup" aria-selected="false">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v6"/><path d="M4.8 4.4a5 5 0 1 0 6.4 0"/></svg>
@@ -324,6 +333,89 @@
     </div>
   </section>
 
+  <!-- ===== Tab File lớn: file đơn lẻ nặng + bản đồ thư mục ===== -->
+  <section class="pane" id="pane-files" role="tabpanel" hidden>
+    <header class="board__head">
+      <div class="hero">
+        <p class="hero__eyebrow" data-i18n="big.eyebrow">File đơn lẻ nặng nhất</p>
+        <p class="hero__value mono" id="big-hero">—</p>
+        <p class="hero__sub" id="big-sub" data-i18n="big.subIdle">Sổ cái chỉ đo được cả thư mục, nên một file 4 GB nằm lẻ trong Downloads không bao giờ lộ ra. Quét đi qua mọi ổ nên có thể mất một hai phút.</p>
+        <div class="scanbar" id="big-scanbar" hidden><span class="scanbar__fill" id="big-scanbar-fill"></span></div>
+      </div>
+      <div class="board__tools">
+        <button class="btn btn--ghost" id="btn-big-cancel" data-i18n="board.stop" hidden>Dừng</button>
+        <button class="btn btn--line" id="btn-big-scan" data-i18n="board.rescan">Quét lại</button>
+      </div>
+    </header>
+
+    <div class="viewbar">
+      <label class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+        <input type="search" id="big-search" data-i18n-placeholder="big.search" placeholder="Tìm theo tên file hoặc đường dẫn…" spellcheck="false" autocomplete="off">
+      </label>
+      <div class="quick" role="group">
+        <button class="quick__btn is-active" data-big-view="list" data-i18n="big.viewList">Danh sách file</button>
+        <button class="quick__btn" data-big-view="map" data-i18n="big.viewMap">Theo thư mục</button>
+      </div>
+      <label class="hist__pick" for="big-threshold">
+        <span data-i18n="big.threshold">Từ cỡ</span>
+        <select id="big-threshold">
+          <option value="52428800">50 MB</option>
+          <option value="104857600" selected>100 MB</option>
+          <option value="524288000">500 MB</option>
+          <option value="1073741824">1 GB</option>
+        </select>
+      </label>
+      <p class="viewbar__hint" id="big-hint"></p>
+    </div>
+
+    <div class="board__scroll" id="big-board">
+      <ol class="rows" id="big-list"></ol>
+      <nav class="crumbs" id="big-crumbs" hidden></nav>
+      <ol class="drift" id="big-map" hidden></ol>
+      <p class="group__empty" id="big-empty" hidden></p>
+      <p class="board__note" data-i18n="big.note"></p>
+    </div>
+  </section>
+
+  <!-- ===== Tab File trùng: nhóm file giống hệt nhau ===== -->
+  <section class="pane" id="pane-dupes" role="tabpanel" hidden>
+    <header class="board__head">
+      <div class="hero">
+        <p class="hero__eyebrow" data-i18n="dup.eyebrow">Lấy lại được nếu mỗi bản giữ một</p>
+        <p class="hero__value mono" id="dup-hero">—</p>
+        <p class="hero__sub" id="dup-sub" data-i18n="dup.subIdle">Tìm file giống hệt nhau từng byte. Không bản nào được tick sẵn: bản nào là bản gốc thì chỉ bạn biết.</p>
+        <div class="scanbar" id="dup-scanbar" hidden><span class="scanbar__fill" id="dup-scanbar-fill"></span></div>
+      </div>
+      <div class="board__tools">
+        <button class="btn btn--ghost" id="btn-dup-cancel" data-i18n="board.stop" hidden>Dừng</button>
+        <button class="btn btn--line" id="btn-dup-scan" data-i18n="board.rescan">Quét lại</button>
+      </div>
+    </header>
+
+    <div class="viewbar">
+      <label class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+        <input type="search" id="dup-search" data-i18n-placeholder="dup.search" placeholder="Tìm theo tên file hoặc đường dẫn…" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="hist__pick" for="dup-min">
+        <span data-i18n="dup.minSize">Từ cỡ</span>
+        <select id="dup-min">
+          <option value="1048576" selected>1 MB</option>
+          <option value="10485760">10 MB</option>
+          <option value="104857600">100 MB</option>
+        </select>
+      </label>
+      <p class="viewbar__hint" id="dup-hint"></p>
+    </div>
+
+    <div class="board__scroll" id="dup-board">
+      <div id="dup-groups"></div>
+      <p class="group__empty" id="dup-empty" hidden></p>
+      <p class="board__note" data-i18n="dup.note"></p>
+    </div>
+  </section>
+
   <!-- ===== Tab Khởi động: mục tự chạy cùng Windows ===== -->
   <section class="pane" id="pane-startup" role="tabpanel" hidden>
     <header class="board__head">
@@ -498,6 +590,8 @@
 <script src="js/tabs-and-ask-dialog.js" defer></script>
 <script src="js/apps-tab.js" defer></script>
 <script src="js/leftovers-tab.js" defer></script>
+<script src="js/files-tab.js" defer></script>
+<script src="js/duplicates-tab.js" defer></script>
 <script src="js/startup-tab.js" defer></script>
 <script src="js/history-tab.js" defer></script>
 <script src="js/slclean-app.js" defer></script>

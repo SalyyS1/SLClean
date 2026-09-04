@@ -13,6 +13,10 @@ let scanning = false;
 let scanCancelled = false;
 /** Tab Thư mục thừa đang quét (mục group "leftover" nằm chung trong `items`). */
 let leftScanning = false;
+/** Tab File lớn đang quét (mục group "bigfile" cũng nằm chung trong `items`). */
+let bigScanning = false;
+/** Tab File trùng đang quét (mục group "dupe" nằm chung trong `items`, vẽ theo nhóm ở tab nó). */
+let dupScanning = false;
 /** App có đang chạy với quyền admin không; set một lần lúc khởi động. */
 let elevated = false;
 
@@ -33,6 +37,8 @@ function passesFilter(it) {
   if (it.checked) return true;
   // Thư mục thừa có bộ lọc/tìm kiếm riêng của tab nó; mục rỗng vẫn hiện vì tự thân thư mục là rác.
   if (it.group === "leftover") return leftoverPasses(it);
+  // File lớn cũng vậy: bộ lọc theo loại file nằm ở tab của nó.
+  if (it.group === "bigfile") return bigFilePasses(it);
   // Mục rỗng không dọn được gì: ẩn cho gọn, trừ khi rỗng vì không đọc được (admin có thể thấy thêm).
   if (it.bytes === 0 && !it.measuring && !it.partial) return false;
   if (!matchesQuery(it)) return false;
@@ -48,11 +54,14 @@ function lockedByAdmin(it) {
 
 /** Không tick được: đang đo, rỗng (trừ thư mục thừa), khoá admin. */
 function unselectable(it) {
+  // File do Windows tự quản (pagefile…) hiện để giải thích chỗ trống, nhưng xoá tay là hỏng máy.
+  if (it.locked) return true;
   return it.measuring || (it.bytes === 0 && it.group !== "leftover") || lockedByAdmin(it);
 }
 
 function containerFor(it) {
   if (it.group === "leftover") return $("#left-list");
+  if (it.group === "bigfile") return $("#big-list");
   return view === "size" ? $("#rows-flat") : $(`#rows-${it.group}`);
 }
 
@@ -147,12 +156,16 @@ function renderAll() {
   $("#rows-flat").innerHTML = "";
   for (const g of GROUPS) $(`#rows-${g}`).innerHTML = "";
   $("#left-list").innerHTML = "";
+  $("#big-list").innerHTML = "";
   const sorted = [...items.values()].sort((a, b) => b.bytes - a.bytes);
   let shown = 0;
   for (const it of sorted) {
+    // Bản trùng nằm chung trong `items` để dùng chung đường dọn, nhưng được vẽ theo nhóm ở tab
+    // riêng của nó, không phải thành hàng rời trong sổ cái.
+    if (it.group === "dupe") continue;
     if (!passesFilter(it)) continue;
     containerFor(it).appendChild(rowFor(it));
-    if (it.group !== "leftover") shown++;
+    if (it.group !== "leftover" && it.group !== "bigfile") shown++;
   }
   $("#empty-flat").hidden = view !== "size" || shown > 0 || scanning;
   refreshTotals();
@@ -167,6 +180,9 @@ function refreshTotals() {
     const max = Math.max(0, ...rows.map((i) => i.bytes));
     for (const li of list.children) {
       const it = items.get(li.dataset.id);
+      // Hàng có thể còn trong DOM sau khi mục bị xoá khỏi `items` (quét lại xoá rồi dựng lại);
+      // lần vẽ kế tiếp sẽ dọn nó, đừng làm hỏng cả lượt cập nhật vì một hàng thừa.
+      if (!it) continue;
       li.querySelector(".row__bar").style.setProperty("--rel", max ? `${((it.bytes / max) * 100).toFixed(1)}%` : "0%");
     }
     const total = rows.reduce((s, i) => s + i.bytes, 0);
@@ -179,13 +195,14 @@ function refreshTotals() {
     gc.disabled = selectable === 0;
     if (g !== "flat") $(`[data-group="${g}"]`).classList.toggle("group--empty", rows.length === 0 && g !== "artifacts");
   }
-  // Thanh cỡ tương đối của danh sách thư mục thừa (tab riêng, không thuộc GROUPS).
-  {
-    const list = $("#left-list");
+  // Thanh cỡ tương đối của hai tab có danh sách riêng (không thuộc GROUPS).
+  for (const sel of ["#left-list", "#big-list"]) {
+    const list = $(sel);
     const rows = [...list.children].map((li) => items.get(li.dataset.id)).filter((i) => i && !i.gone);
     const max = Math.max(0, ...rows.map((i) => i.bytes));
     for (const li of list.children) {
       const it = items.get(li.dataset.id);
+      if (!it) continue;
       li.querySelector(".row__bar").style.setProperty("--rel", max ? `${((it.bytes / max) * 100).toFixed(1)}%` : "0%");
     }
   }
@@ -193,7 +210,9 @@ function refreshTotals() {
   for (const it of items.values()) {
     if (it.gone) continue;
     if (it.checked) { checkedBytes += it.bytes; checkedCount++; }
-    if (it.group === "leftover") continue;
+    // Hai tab này không cộng vào "tìm thấy có thể dọn": file lớn là đồ của người dùng, không
+    // phải rác, và cộng cả vào sẽ đếm trùng với mục cache chứa nó.
+    if (it.group === "leftover" || it.group === "bigfile" || it.group === "dupe") continue;
     foundBytes += it.bytes;
     if (!passesFilter(it) && it.bytes > 0) { hiddenBytes += it.bytes; hiddenCount++; }
     if (it.bytes === 0 && !it.measuring && !it.partial) zeroHidden++;
@@ -206,10 +225,12 @@ function refreshTotals() {
   if (hiddenCount) hints.push(t("filter.hint", { n: hiddenCount, b: fmtBytes(hiddenBytes) }));
   if (zeroHidden) hints.push(t("filter.zero", { n: zeroHidden }));
   $("#filter-hint").textContent = hints.join(" · ");
-  $("#btn-clean").disabled = checkedCount === 0 || scanning || leftScanning;
+  $("#btn-clean").disabled = checkedCount === 0 || scanning || leftScanning || bigScanning || dupScanning;
   setTabBadge("clean", checkedCount, false);
   paintGains();
   refreshLeftTotals();
+  refreshBigTotals();
+  refreshDupTotals();
 }
 
 /** Đồng bộ ô tick của mọi hàng đang hiển thị với trạng thái trong `items`. */

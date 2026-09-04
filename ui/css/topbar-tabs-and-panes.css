@@ -15,7 +15,11 @@
   border: 1px solid var(--line-soft);
   border-radius: 999px;
   background: var(--moss-2);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 
 .tab {
   display: inline-flex;
@@ -28,9 +32,13 @@
   color: var(--dust);
   font-size: 13px;
   font-weight: 500;
+  /* Với bảy tab, cửa sổ hẹp làm flex co từng tab lại cho tới khi nhãn xuống hai dòng. Thà để
+     thanh tab cuộn ngang còn hơn để chữ gãy dòng. */
+  flex: 0 0 auto;
+  white-space: nowrap;
   transition: color 140ms, background-color 140ms;
 }
-.tab svg { width: 14px; height: 14px; opacity: 0.8; }
+.tab svg { width: 14px; height: 14px; opacity: 0.8; flex: 0 0 auto; }
 .tab:hover { color: var(--bone); background: var(--moss-3); }
 .tab.is-active { color: var(--moss); background: var(--amber); font-weight: 600; }
 .tab.is-active svg { opacity: 1; }

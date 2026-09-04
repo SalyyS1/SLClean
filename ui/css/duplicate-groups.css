@@ -1,0 +1,56 @@
+/* Tab File trùng: mỗi nhóm là một khối gập được, đầu nhóm cho biết cỡ một bản và lấy lại được
+   bao nhiêu, bên trong là từng bản để người dùng tự chọn bản nào bỏ. */
+.dupe {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin: 0 0 10px;
+  overflow: hidden;
+  animation: row-in var(--dur) var(--ease) both;
+}
+/* Tick hết mọi bản trong nhóm = xoá sạch file khỏi máy. Viền đỏ để không ai làm nhầm. */
+.dupe--all-checked { border-color: var(--ember); }
+
+.dupe__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  background: var(--moss-2);
+}
+.dupe--all-checked .dupe__head { background: var(--ember-tint); }
+
+.dupe__toggle {
+  font: inherit;
+  color: var(--dust);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.dupe__toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.dupe__name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dupe__count { font-size: 12px; color: var(--dust); white-space: nowrap; }
+.dupe__each { font-size: 12.5px; color: var(--dust-dim); white-space: nowrap; }
+.dupe__wasted {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber);
+  min-width: 9ch;
+  text-align: right;
+}
+
+.dupe__files { list-style: none; margin: 0; padding: 0; }
+.dupe__file {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+.dupe__file:hover { background: var(--moss-2); }
+.dupe__main { min-width: 0; display: grid; gap: 2px; }

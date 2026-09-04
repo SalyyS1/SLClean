@@ -55,6 +55,28 @@
 /* Ổ đĩa đầy thêm là tin xấu: số lớn ở hero tô đỏ thay vì hổ phách. */
 .hero__value--up { color: var(--ember); }
 
+/* Bản đồ thư mục dùng lại hàng .drift; hàng có thư mục con thì bấm được để đi sâu. */
+.drift__row--into { cursor: pointer; }
+.drift__row--into:hover { background: var(--moss-2); }
+.drift__row--into:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.drift__row--into::after { background: var(--amber); }
+
+.crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 18px; font-size: 12.5px; }
+.crumbs__sep { color: var(--dust-dim); }
+.crumbs__item {
+  font: inherit;
+  font-family: var(--font-mono);
+  color: var(--amber);
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.crumbs__item:hover { background: var(--moss-2); }
+.crumbs__item:disabled { color: var(--bone-dim); cursor: default; }
+.crumbs__item:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
 .hist__pick { display: grid; gap: 4px; font-size: 12px; color: var(--dust); }
 .hist__pick select {
   font: inherit;

@@ -4,11 +4,13 @@
 
 mod apps;
 mod artifacts;
+mod big_files;
 mod catalog;
 mod catalog_dynamic;
 mod catalog_specs;
 mod cleaner;
 mod drives;
+mod duplicates;
 mod elevation;
 mod history;
 mod installed_apps;
@@ -289,6 +291,70 @@ async fn scan_leftovers(app: AppHandle, state: State<'_, ScanState>) -> Result<V
     .map_err(|e| e.to_string())
 }
 
+/// Tab File lớn: quét file đơn lẻ ≥ ngưỡng trên mọi ổ cố định, kèm bản đồ dung lượng theo thư
+/// mục. Phát `big-file` cho từng file tìm thấy và `big-progress` định kỳ để UI hiện dần; kết
+/// quả cuối kèm bản đồ. Đi cả ổ nên có thể lâu — dùng chung nút Huỷ với các tab khác.
+#[tauri::command]
+async fn scan_big_files(app: AppHandle, state: State<'_, ScanState>, threshold: Option<u64>) -> Result<big_files::BigScan, String> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+    let settings = settings::load(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let roots: Vec<PathBuf> = drives::list_drives().into_iter().map(|d| PathBuf::from(format!("{}\\", d.mount))).collect();
+        let threshold = threshold.unwrap_or(big_files::DEFAULT_THRESHOLD);
+        let last = Mutex::new(Instant::now());
+        big_files::scan(
+            &roots,
+            &settings.excluded_roots,
+            threshold,
+            &cancel,
+            |partial| {
+                let mut t = last.lock().unwrap();
+                if t.elapsed() >= Duration::from_millis(250) {
+                    *t = Instant::now();
+                    let _ = app.emit("big-progress", BigProgress { files: partial.scanned_files, bytes: partial.scanned_bytes, found: partial.files.len() as u64 });
+                }
+            },
+            |f| {
+                let _ = app.emit("big-file", f);
+            },
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Tab File trùng: nhóm file giống hệt nhau trên mọi ổ cố định. Phát `dup-group` cho từng nhóm
+/// tìm được để UI hiện dần; kết quả cuối kèm tổng lãng phí. Dùng chung nút Huỷ với các tab khác.
+#[tauri::command]
+async fn scan_duplicates(app: AppHandle, state: State<'_, ScanState>, min_size: Option<u64>) -> Result<duplicates::DupScan, String> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+    let settings = settings::load(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let roots: Vec<PathBuf> = drives::list_drives().into_iter().map(|d| PathBuf::from(format!("{}\\", d.mount))).collect();
+        // Bản trùng trong Program Files / AppData / Windows là do trình cài dựng ra, không phải
+        // người dùng chép hai lần: nêu ra chỉ tổ dụ người ta xoá hỏng app. Các thư mục cache
+        // trong danh mục cũng loại luôn — tab Dọn dẹp đã dọn cả cụm, tốt hơn là xoá lẻ từng file.
+        let mut excluded = settings.excluded_roots.clone();
+        excluded.extend(duplicates::program_areas());
+        excluded.extend(catalog::existing_entries().into_iter().flat_map(|e| e.paths));
+        duplicates::scan(&roots, &excluded, min_size.unwrap_or(duplicates::MIN_SIZE), &cancel, |g| {
+            let _ = app.emit("dup-group", g);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Số liệu tạm trong lúc quét file lớn.
+#[derive(Clone, Serialize)]
+pub struct BigProgress {
+    pub files: u64,
+    pub bytes: u64,
+    pub found: u64,
+}
+
 /// Tab Khởi động: mục tự chạy cùng Windows từ Run, thư mục Startup và scheduled task.
 /// Chỉ đọc registry + một lần gọi `schtasks` nên nhanh, không cần phát event tiến độ.
 #[tauri::command]
@@ -398,6 +464,8 @@ pub fn run() {
             uninstall_app,
             remove_dead_app,
             scan_leftovers,
+            scan_big_files,
+            scan_duplicates,
             scan_startup,
             set_startup_enabled,
             remove_startup_entry,

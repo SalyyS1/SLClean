@@ -23,6 +23,9 @@ sysinfo = { version = "0.39", default-features = false, features = ["disk", "sys
 dirs = "6"
 tauri-plugin-dialog = "2"
 sys-locale = "0.3"
+# Băm file để tìm bản sao. Chọn sha2 vì nó có sẵn trong cargo cache offline của máy này;
+# blake3 nhanh hơn nhưng không có, mà build gãy vì thiếu crate thì đắt hơn phần chênh tốc độ.
+sha2 = "0.10"
 
 # Bản dev không cần debuginfo (tiết kiệm ~2 GB trên ổ đĩa vốn đã đầy); dependency được
 # tối ưu để jwalk/rayon quét nhanh ngay cả khi chưa build release.

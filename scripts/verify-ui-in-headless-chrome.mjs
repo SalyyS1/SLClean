@@ -85,6 +85,53 @@ const FAKE = {
   },
 };
 
+// File trùng: một nhóm ba bản (hai bản cùng thư mục) và một nhóm hai bản.
+const dupFile = (p, days, same) => ({ path: p, modified: NOW - days * DAY, same_dir_as_sibling: same });
+const dupGroup = (mb, files) => ({ bytes: mb * 1024 * 1024, files, wasted: mb * 1024 * 1024 * (files.length - 1) });
+FAKE.dupes = {
+  groups: [
+    dupGroup(512, [
+      dupFile("D:\\Drive\\SkyPvP.zip", 300, false),
+      dupFile("D:\\Minecraft\\FILE\\SkyPvP.zip", 120, true),
+      dupFile("D:\\Minecraft\\FILE\\SkyPvP copy.zip", 20, true),
+    ]),
+    dupGroup(120, [
+      dupFile("C:\\Users\\Salyyy\\Downloads\\setup.exe", 90, false),
+      dupFile("D:\\Work\\setup.exe", 10, false),
+    ]),
+  ],
+  wasted: (512 * 2 + 120) * 1024 * 1024,
+  scanned_files: 400000,
+  hashed_files: 8,
+};
+
+// File lớn: một file bị Windows khoá (không tick được) và một cây thư mục ba cấp để đi sâu.
+const bigFile = (p, mb, ext, extra = {}) => ({ path: p, bytes: mb * 1024 * 1024, modified: NOW - (extra.days ?? 30) * DAY, ext, locked: extra.locked ?? false });
+const dirNode = (path, mb, files, children = []) => ({ path, bytes: mb * 1024 * 1024, files, children });
+FAKE.big = {
+  files: [
+    bigFile("D:\\Game\\Riot Games\\League of Legends\\Plugins\\default-assets2.wad", 3356, "wad", { days: 5 }),
+    bigFile("C:\\pagefile.sys", 2048, "sys", { locked: true, days: 0 }),
+    bigFile("C:\\Users\\Salyyy\\Downloads\\Dead Cells 3.5.6 HVH.ipa", 1225, "ipa", { days: 200 }),
+    bigFile("C:\\Users\\Salyyy\\.codex\\logs_2.sqlite", 1013, "sqlite", { days: 2 }),
+    bigFile("D:\\Drive\\EARTH CARI.zip", 791, "zip", { days: 400 }),
+  ],
+  map: [
+    dirNode("D:\\", 114075, 480000, [
+      dirNode("D:\\Game", 48869, 210000, [dirNode("D:\\Game\\Riot Games", 30120, 90000, [dirNode("D:\\Game\\Riot Games\\League of Legends", 29000, 80000)]), dirNode("D:\\Game\\Steam", 15000, 100000)]),
+      dirNode("D:\\Project", 22306, 190000, [dirNode("D:\\Project\\sweep", 5000, 40000)]),
+      dirNode("D:\\Drive", 3993, 40, []),
+    ]),
+    dirNode("C:\\", 89456, 620000, [
+      dirNode("C:\\Users", 45763, 400000, [dirNode("C:\\Users\\Salyyy", 45000, 390000)]),
+      dirNode("C:\\Program Files", 13835, 120000, []),
+    ]),
+  ],
+  denied: 12,
+  scanned_files: 1100000,
+  scanned_bytes: 203531 * 1024 * 1024,
+};
+
 // Mục khởi động: đủ cả 5 nguồn, mục đã tắt, mục hỏng (xoá được), mục cần admin, mục của Windows.
 const boot = (id, name, command, source, extra = {}) => ({
   id, name, command, source, target: extra.target ?? command, enabled: extra.enabled ?? true,
@@ -220,6 +267,18 @@ await page.addInitScript((fake) => {
             if (!a) throw "missing";
             if (a.needs_admin) throw "needs-admin";
             return { gone: true, leftover_dir: null, freed: args.deleteFolder && a.folder_exists ? 1234 : 0 };
+          }
+          case "scan_big_files": {
+            const th = args.threshold ?? 100 * 1024 * 1024;
+            const files = fake.big.files.filter((f) => f.bytes >= th);
+            for (const f of files) { await sleep(8); emit("big-file", f); }
+            emit("big-progress", { files: fake.big.scanned_files, bytes: fake.big.scanned_bytes, found: files.length });
+            return { ...fake.big, files };
+          }
+          case "scan_duplicates": {
+            const groups = fake.dupes.groups.filter((g) => g.bytes >= (args.minSize ?? 1048576));
+            for (const g of groups) { await sleep(10); emit("dup-group", g); }
+            return { ...fake.dupes, groups };
           }
           case "scan_startup": { await sleep(30); return startup; }
           case "set_startup_enabled": {
@@ -430,6 +489,82 @@ await scanned();
 const leftRowsAfterRescan = await page.evaluate(() => [...items.values()].filter((i) => i.group === "leftover").length);
 const tabStored = await page.evaluate(() => localStorage.getItem("slclean-tab"));
 
+// Tab File lớn: danh sách file, file Windows tự quản không tick được, bản đồ đi sâu được,
+// và tick một file phải cộng vào đúng tổng "Đã chọn" chung với các tab khác.
+await page.click('[data-tab="files"]');
+await page.waitForFunction(() => document.querySelectorAll("#big-list .row").length >= 5, null, { timeout: 15000 });
+const bigHero = await page.locator("#big-hero").textContent();
+const bigSub = await page.locator("#big-sub").textContent();
+const bigBadge = await page.locator("#badge-files").textContent();
+const bigRows = await page.evaluate(() => [...document.querySelectorAll("#big-list .row")].map((r) => ({
+  label: r.querySelector(".row__label").textContent, tags: [...r.querySelectorAll(".tag")].map((t) => t.textContent),
+  size: r.querySelector(".row__size").textContent, age: r.querySelector(".row__age")?.textContent, locked: r.querySelector("input").disabled,
+})));
+await page.screenshot({ path: path.join(shots, "slclean-files.png") });
+// Tick một file thật rồi đọc tổng chung ở thanh trái.
+await page.locator("#big-list .row").filter({ hasText: "Dead Cells" }).locator(".row__label").click();
+const tallyBig = await page.locator("#tally-bytes").textContent();
+const cleanBadgeBig = await page.locator("#badge-clean").textContent();
+// "Tìm thấy có thể dọn" không được cộng file lớn vào: đó là đồ của người dùng, không phải rác.
+const foundAfterBig = await page.locator("#found-bytes").textContent();
+await page.locator("#big-list .row").filter({ hasText: "Dead Cells" }).locator(".row__label").click();
+// Bản đồ thư mục: đi sâu hai cấp rồi quay lên bằng crumb.
+await page.click('[data-big-view="map"]');
+await page.waitForTimeout(150);
+const mapTop = await page.evaluate(() => [...document.querySelectorAll("#big-map .drift__row")].map((r) => `${r.querySelector(".drift__label").textContent.trim()} ${r.querySelector(".drift__delta").textContent}`));
+await page.locator("#big-map .drift__row").first().click();
+await page.waitForTimeout(150);
+const mapLevel2 = await page.evaluate(() => [...document.querySelectorAll("#big-map .drift__row .drift__label")].map((e) => e.textContent.trim()));
+await page.locator("#big-map .drift__row").first().click();
+await page.waitForTimeout(150);
+const mapCrumbs = await page.evaluate(() => [...document.querySelectorAll("#big-crumbs .crumbs__item")].map((b) => `${b.textContent}${b.disabled ? "*" : ""}`));
+await page.screenshot({ path: path.join(shots, "slclean-files-map.png") });
+await page.locator("#big-crumbs .crumbs__item").first().click();
+await page.waitForTimeout(150);
+const mapBackAtTop = await page.evaluate(() => document.querySelectorAll("#big-map .drift__row").length);
+await page.click('[data-big-view="list"]');
+// Đổi ngưỡng: quét lại và chỉ giữ file ≥ 1 GB.
+await page.selectOption("#big-threshold", "1073741824");
+await page.waitForFunction(() => document.querySelectorAll("#big-list .row").length > 0 && document.querySelector("#big-scanbar").hidden, null, { timeout: 15000 });
+const bigRowsAtGb = await page.evaluate(() => [...document.querySelectorAll("#big-list .row .row__label")].map((e) => e.textContent));
+const thresholdSaved = await page.evaluate(() => localStorage.getItem("slclean-big-threshold"));
+
+// Tab File trùng: nhóm gập được, không bản nào tick sẵn, và tick hết một nhóm phải cảnh báo.
+await page.click('[data-tab="dupes"]');
+await page.waitForFunction(() => document.querySelectorAll(".dupe").length >= 2, null, { timeout: 15000 });
+const dupHero = await page.locator("#dup-hero").textContent();
+const dupSub = await page.locator("#dup-sub").textContent();
+const dupBadge = await page.locator("#badge-dupes").textContent();
+const dupPreChecked = await page.locator(".dupe__file input:checked").count();
+const dupGroupsShown = await page.evaluate(() => [...document.querySelectorAll(".dupe")].map((s) => ({
+  name: s.querySelector(".dupe__name").textContent, count: s.querySelector(".dupe__count").textContent,
+  each: s.querySelector(".dupe__each").textContent, wasted: s.querySelector(".dupe__wasted").textContent,
+  files: [...s.querySelectorAll(".dupe__file")].map((f) => ({ label: f.querySelector(".row__label").textContent, tags: [...f.querySelectorAll(".tag")].map((t) => t.textContent), age: f.querySelector(".row__age").textContent })),
+})));
+await page.screenshot({ path: path.join(shots, "slclean-dupes.png") });
+// Tick một bản: cộng vào tổng chung, không cảnh báo gì.
+await page.locator(".dupe").first().locator(".dupe__file").nth(2).locator(".row__label").click();
+await page.waitForTimeout(150);
+const dupTallyOne = await page.locator("#tally-bytes").textContent();
+const dupToastOne = await page.evaluate(() => document.querySelector("#toast").classList.contains("is-on"));
+// Tick nốt hai bản còn lại: phải cảnh báo và nhóm phải đổi sang trạng thái nguy hiểm.
+await page.locator(".dupe").first().locator(".dupe__file").nth(0).locator(".row__label").click();
+await page.locator(".dupe").first().locator(".dupe__file").nth(1).locator(".row__label").click();
+await page.waitForTimeout(200);
+const dupWarn = await page.locator("#toast").textContent();
+const dupAllCheckedClass = await page.locator(".dupe").first().evaluate((el) => el.classList.contains("dupe--all-checked"));
+// Bỏ tick hết rồi gập nhóm lại.
+for (const i of [0, 1, 2]) await page.locator(".dupe").first().locator(".dupe__file").nth(i).locator(".row__label").click();
+await page.locator(".dupe").first().locator(".dupe__toggle").click();
+await page.waitForTimeout(150);
+const dupCollapsedHidden = await page.locator(".dupe").first().locator(".dupe__files").isHidden();
+await page.locator(".dupe").first().locator(".dupe__toggle").click();
+// Đổi ngưỡng: chỉ còn nhóm ≥ 100 MB (cả hai nhóm đều qua) rồi về lại 1 MB.
+await page.selectOption("#dup-min", "104857600");
+await page.waitForFunction(() => document.querySelectorAll(".dupe").length > 0 && document.querySelector("#dup-scanbar").hidden, null, { timeout: 15000 });
+const dupAt100 = await page.locator(".dupe").count();
+const dupMinSaved = await page.evaluate(() => localStorage.getItem("slclean-dup-min"));
+
 // Tab Khởi động: quét lười, công tắc tắt/bật, mục cần admin bị chặn, mục hỏng xoá được.
 await page.click('[data-tab="startup"]');
 await page.waitForFunction(() => document.querySelectorAll(".boot").length >= 8, null, { timeout: 15000 });
@@ -499,6 +634,8 @@ await page.waitForTimeout(120);
 console.log(JSON.stringify({ fonts, rowsCount, heroBytes, tallyAfterScan, measuringLeft, searchRows, groupCounts, enTexts, langSaved, chipCount, savedRoots, toastText, tallyRebuild, gainD, confirmTitle, doneText, nowText, goneRows, tallyAfterClean, quickTitle, overflow,
   appsHero, appsSub, appsOrder, appsBadge, appsLastUsed, neverRows, componentRows, deadRows, deadLocked, askDeadTitle, askDeadOptionHidden, toastDead, appsBadgeAfter, askUninstallTitle, askLeftoverTitle, askLeftoverPath, toastLeftover, blockbenchGone, paintUninstallDisabled, appsSearchRows,
   leftHero, leftBadge, leftRows, tallyLeftover, cleanBadge, leftoverConfirmTitle, leftoverDoneText, leftoverGoneRows, leftPackagesRows, leftRowsAfterRescan, tabStored,
+  bigHero, bigSub, bigBadge, bigRows, tallyBig, cleanBadgeBig, foundAfterBig, mapTop, mapLevel2, mapCrumbs, mapBackAtTop, bigRowsAtGb, thresholdSaved,
+  dupHero, dupSub, dupBadge, dupPreChecked, dupGroupsShown, dupTallyOne, dupToastOne, dupWarn, dupAllCheckedClass, dupCollapsedHidden, dupAt100, dupMinSaved,
   startHero, startSub, startBadge, startRows, steamAfter, startHeroAfterOff, toastOff, adminToast, adminStillOn, brokenRows, askStartTitle, startupAfterRemove, startBadgeAfter, staleRows, staleAfterOff,
   snapsRecorded, histHero, histSub, histDrives, histRows, histGrew, histNew, histHint, histRowsEn, errors }, null, 2));
 await browser.close();

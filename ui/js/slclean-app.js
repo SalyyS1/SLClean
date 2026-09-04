@@ -241,7 +241,9 @@ async function runClean() {
       if (it.bytes === 0 || !r.error) { it.gone = !it.keepRoot || it.bytes === 0; it.checked = false; }
       const li = document.querySelector(`[data-id="${CSS.escape(r.id)}"]`);
       if (li) {
-        li.querySelector(".row__size").textContent = fmtBytes(it.bytes);
+        // Hàng của tab File trùng không có cột cỡ riêng (cỡ nằm ở đầu nhóm).
+        const size = li.querySelector(".row__size");
+        if (size) size.textContent = fmtBytes(it.bytes);
         li.classList.toggle("row--gone", it.gone);
         li.querySelector("input").checked = false;
         li.classList.remove("row--checked");
@@ -261,6 +263,8 @@ async function runClean() {
   } finally {
     un();
     refreshTotals();
+    // Nhóm trùng phải vẽ lại: bản vừa xoá biến mất, nhóm còn một bản thì hết là nhóm trùng.
+    refreshDupesAfterClean();
     $("#progress-close").hidden = false;
     loadDrives();
     loadRecycle();
