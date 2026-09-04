@@ -14,12 +14,45 @@ left behind by uninstalled apps. Tauri 2 + Rust desktop app, Vietnamese/English 
 is deleted until you tick it and confirm. Grab the installer or the portable exe from
 [Releases](../../releases); the binary is unsigned, so SmartScreen asks once.
 
-![SLClean sau khi quét](scripts/shots/slclean-real-vi.png)
+## Ba tab
 
-Ba tab: **Dọn dẹp** (cache, thư mục tạm, artifact build), **Ứng dụng** (mọi app đã cài với
-lần mở cuối, gỡ hoặc xoá mục chết) và **Thư mục thừa** (thư mục không app nào nhận).
+| Tab | Làm gì |
+|---|---|
+| **Dọn dẹp** | Cache, thư mục tạm và artifact build trên mọi ổ. Đo thật từng mục, phân loại theo mức an toàn. |
+| **Ứng dụng** | Mọi app đã cài kèm lần mở cuối theo Windows ghi. Gỡ app, hoặc xoá mục "chết" mà Settings không gỡ được. |
+| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files mà không app đã cài nào nhận. |
+
+### Dọn dẹp
+
+![Tab Dọn dẹp](scripts/shots/slclean-real-vi.png)
+
+Con số lớn là tổng tìm thấy, thanh trái là tổng đã tick. Không mục nào bị xoá cho tới khi bạn
+tick và bấm xác nhận; mục `xem lại` (có dữ liệu của bạn) không bao giờ tự tick.
+
+### Ứng dụng
 
 ![Tab Ứng dụng](scripts/shots/slclean-real-apps.png)
+
+Mỗi app có hãng, phiên bản, ngày cài, dung lượng thư mục cài **đo thật**, và lần mở cuối lấy
+từ nhật ký của chính Windows. Sắp theo lâu không mở / lớn nhất / mới cài / tên.
+
+Thành phần chạy nền (redistributable, runtime, SDK, driver, service, codec…) được tách thành
+nhóm riêng để không lẫn vào danh sách app đáng gỡ — trên máy thử, việc này đưa 24 mục ra khỏi
+nhóm "chưa từng mở", giảm 84 xuống 60:
+
+![Bộ lọc thành phần hệ thống](scripts/shots/slclean-real-apps-components.png)
+
+### Thư mục thừa
+
+![Tab Thư mục thừa](scripts/shots/slclean-real-leftovers.png)
+
+Thư mục app đã gỡ để lại. Tick rồi dọn bằng chính nút ở thanh trái, chung với mục cache.
+
+### Cài đặt
+
+![Hộp cài đặt](scripts/shots/slclean-settings.png)
+
+Ngôn ngữ, thư mục quét thêm hoặc loại trừ, và chế độ Thùng rác. Không có gì được gửi đi đâu.
 
 ## Chạy từ mã nguồn
 
@@ -232,7 +265,7 @@ scripts/
   e2e-trash-mode-roundtrip-in-real-app.mjs  dọn fixture có tick và không tick Thùng rác, đếm Thùng rác từ shell Windows
   make-throwaway-app-fixtures.ps1      mục Uninstall giả (một chết, một gỡ được) + thư mục mồ côi trong %LOCALAPPDATA%; -Remove để dọn
   e2e-apps-and-leftovers-in-real-app.mjs  xoá mục chết, gỡ app giả, dọn thư mục sót và thư mục mồ côi trên app thật; soi registry/đĩa sau mỗi bước
-  shoot-apps-and-leftovers-tabs-in-real-app.mjs  chụp hai tab mới trên app thật cho README
+  shoot-all-tabs-in-real-app.mjs       chụp mọi ảnh README trên app thật (ba tab vi, tab Dọn dẹp en, hộp cài đặt)
   make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
 ```
 
