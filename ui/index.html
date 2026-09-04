@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SLClean</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/design-tokens.css">
+  <link rel="stylesheet" href="css/base-and-layout.css">
+  <link rel="stylesheet" href="css/rail-drives-and-summary.css">
+  <link rel="stylesheet" href="css/hero-search-and-scanbar.css">
+  <link rel="stylesheet" href="css/ledger-rows.css">
+  <link rel="stylesheet" href="css/dialog-and-toast.css">
+  <link rel="stylesheet" href="css/settings-dialog.css">
+</head>
+<body>
+
+<!-- Thanh trái: ổ đĩa, tổng đã chọn, nút dọn. Luôn hiển thị để người dùng thấy hậu quả của mỗi tick. -->
+<aside class="rail">
+  <header class="rail__brand">
+    <span class="rail__mark" aria-hidden="true"></span>
+    <h1 class="rail__title">SLClean</h1>
+    <button class="rail__lang" id="btn-lang" title="Tiếng Việt / English">EN</button>
+    <p class="rail__tag" data-i18n="app.tagline">Dọn cache &amp; artifact build trên máy này</p>
+  </header>
+
+  <section class="drives" aria-label="Drives">
+    <ul class="drives__list" id="drives"></ul>
+  </section>
+
+  <section class="tally" aria-live="polite">
+    <p class="tally__label" data-i18n="rail.selected">Đã chọn để dọn</p>
+    <p class="tally__value"><span id="tally-bytes">0 B</span></p>
+    <p class="tally__meta" id="tally-count">0 mục · giải phóng ước tính</p>
+  </section>
+
+  <section class="tally tally--found">
+    <p class="tally__label" data-i18n="rail.found">Tìm thấy có thể dọn</p>
+    <p class="tally__value tally__value--dim"><span id="found-bytes">—</span></p>
+    <p class="tally__meta" id="scan-status" data-i18n="rail.notScanned">Chưa quét</p>
+  </section>
+
+  <div class="rail__actions">
+    <label class="mode">
+      <input type="checkbox" id="to-trash">
+      <span class="mode__box" aria-hidden="true"></span>
+      <span class="mode__text"><span data-i18n="rail.trashMode">Đưa vào Thùng rác thay vì xoá hẳn</span> <small data-i18n="rail.trashModeHint">Chậm hơn và không giải phóng chỗ cho đến khi dọn Thùng rác.</small></span>
+    </label>
+    <button class="btn btn--ember" id="btn-clean" disabled data-i18n="rail.clean">Dọn các mục đã chọn</button>
+  </div>
+
+  <footer class="rail__foot">
+    <button class="btn btn--ghost" id="btn-admin" hidden data-i18n-title="rail.adminTitle">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 1.5 13.5 3v4c0 3.2-2.2 5.8-5.5 7-3.3-1.2-5.5-3.8-5.5-7V3z"/></svg>
+      <span data-i18n="rail.admin">Chạy với quyền admin</span>
+    </button>
+    <p class="rail__admin-note" id="admin-note" hidden data-i18n="rail.adminOn">Đang chạy với quyền admin.</p>
+    <button class="btn btn--ghost" id="btn-recycle"><span data-i18n="rail.recycle">Thùng rác</span>: <span id="recycle-info">…</span></button>
+    <button class="btn btn--ghost" id="btn-settings">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>
+      <span data-i18n="rail.settings">Cài đặt</span>
+    </button>
+  </footer>
+</aside>
+
+<!-- Vùng chính: tổng quan + sổ cái các mục. -->
+<main class="board">
+  <header class="board__head">
+    <div class="hero">
+      <p class="hero__eyebrow" data-i18n="hero.eyebrow">Có thể giải phóng</p>
+      <p class="hero__value mono" id="hero-bytes">—</p>
+      <p class="hero__sub" id="hero-sub" data-i18n="hero.subIdle">Tick mục muốn dọn rồi bấm Dọn.</p>
+      <div class="scanbar" id="scanbar" hidden><span class="scanbar__fill" id="scanbar-fill"></span></div>
+    </div>
+    <div class="board__tools">
+      <button class="btn btn--amber" id="btn-quick" data-i18n="hero.quickSafe">Dọn nhanh phần an toàn</button>
+      <button class="btn btn--line" id="btn-scan" data-i18n="board.rescan">Quét lại</button>
+      <button class="btn btn--ghost" id="btn-cancel" hidden data-i18n="board.stop">Dừng</button>
+    </div>
+  </header>
+
+  <!-- Tìm kiếm, cách xem, bộ lọc, chọn nhanh. -->
+  <div class="viewbar">
+    <label class="search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+      <input type="search" id="search" data-i18n-placeholder="board.search" placeholder="Tìm theo tên hoặc đường dẫn…" spellcheck="false" autocomplete="off">
+    </label>
+    <div class="quick" role="group" data-i18n-aria="view.size">
+      <button class="quick__btn" data-view="size" data-i18n="view.size">Lớn nhất trước</button>
+      <button class="quick__btn" data-view="group" data-i18n="view.group">Theo nhóm</button>
+    </div>
+    <div class="quick" role="group" data-i18n-aria="filter.all">
+      <button class="quick__btn" data-filter="all" data-i18n="filter.all">Tất cả</button>
+      <button class="quick__btn" data-filter="safe" data-i18n="filter.safe">Chỉ an toàn</button>
+      <button class="quick__btn" data-filter="safe-rebuild" data-i18n="filter.safeRebuild">An toàn + tạo lại được</button>
+    </div>
+    <div class="quick" role="group">
+      <button class="quick__btn" data-pick="safe" data-i18n="pick.safe">Chọn an toàn</button>
+      <button class="quick__btn" data-pick="rebuild" data-i18n="pick.rebuild">+ tạo lại được</button>
+      <button class="quick__btn" data-pick="none" data-i18n="pick.none">Bỏ chọn</button>
+    </div>
+    <p class="viewbar__hint" id="filter-hint"></p>
+  </div>
+
+  <div class="board__scroll" id="board">
+    <!-- Xem phẳng: mọi mục trộn chung, sắp theo dung lượng giảm dần. -->
+    <section class="group" id="flat-view" hidden>
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="flat"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="flat.name">Mọi mục, lớn nhất trước</h3>
+        <span class="group__hint" data-i18n="flat.hint">gộp cả cache lẫn artifact build</span>
+        <span class="group__size mono" data-group-size="flat">—</span>
+      </header>
+      <ol class="rows" id="rows-flat"></ol>
+      <p class="group__empty" id="empty-flat" hidden data-i18n="flat.empty">Không có mục nào khớp.</p>
+    </section>
+
+    <section class="group" data-group="artifacts">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="artifacts"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.artifacts">Artifact build trong dự án</h3>
+        <span class="group__hint" data-i18n="group.artifacts.hint"></span>
+        <span class="group__size mono" data-group-size="artifacts">—</span>
+      </header>
+      <ol class="rows" id="rows-artifacts"></ol>
+      <p class="group__empty" id="empty-artifacts" data-i18n="artifacts.searching">Đang tìm trong các thư mục dự án…</p>
+    </section>
+
+    <section class="group" data-group="ai">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="ai"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.ai">Công cụ AI</h3>
+        <span class="group__hint" data-i18n="group.ai.hint"></span>
+        <span class="group__size mono" data-group-size="ai">—</span>
+      </header>
+      <ol class="rows" id="rows-ai"></ol>
+    </section>
+
+    <section class="group" data-group="package">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="package"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.package">Kho gói</h3>
+        <span class="group__hint" data-i18n="group.package.hint"></span>
+        <span class="group__size mono" data-group-size="package">—</span>
+      </header>
+      <ol class="rows" id="rows-package"></ol>
+    </section>
+
+    <section class="group" data-group="editor">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="editor"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.editor">Trình soạn thảo</h3>
+        <span class="group__hint" data-i18n="group.editor.hint"></span>
+        <span class="group__size mono" data-group-size="editor">—</span>
+      </header>
+      <ol class="rows" id="rows-editor"></ol>
+    </section>
+
+    <section class="group" data-group="browser">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="browser"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.browser">Trình duyệt</h3>
+        <span class="group__hint" data-i18n="group.browser.hint"></span>
+        <span class="group__size mono" data-group-size="browser">—</span>
+      </header>
+      <ol class="rows" id="rows-browser"></ol>
+    </section>
+
+    <section class="group" data-group="app">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="app"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.app">Ứng dụng</h3>
+        <span class="group__hint" data-i18n="group.app.hint"></span>
+        <span class="group__size mono" data-group-size="app">—</span>
+      </header>
+      <ol class="rows" id="rows-app"></ol>
+    </section>
+
+    <section class="group" data-group="game">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="game"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.game">Game</h3>
+        <span class="group__hint" data-i18n="group.game.hint"></span>
+        <span class="group__size mono" data-group-size="game">—</span>
+      </header>
+      <ol class="rows" id="rows-game"></ol>
+    </section>
+
+    <section class="group" data-group="system">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="system"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.system">Windows</h3>
+        <span class="group__hint" data-i18n="group.system.hint"></span>
+        <span class="group__size mono" data-group-size="system">—</span>
+      </header>
+      <ol class="rows" id="rows-system"></ol>
+    </section>
+
+    <section class="group" data-group="temp">
+      <header class="group__head">
+        <label class="check check--group"><input type="checkbox" data-group-check="temp"><span class="check__box"></span></label>
+        <h3 class="group__name" data-i18n="group.temp">Thư mục tạm ở gốc ổ đĩa</h3>
+        <span class="group__hint" data-i18n="group.temp.hint"></span>
+        <span class="group__size mono" data-group-size="temp">—</span>
+      </header>
+      <ol class="rows" id="rows-temp"></ol>
+    </section>
+
+    <p class="board__note" data-i18n="board.note"></p>
+  </div>
+</main>
+
+<!-- Xác nhận trước khi xoá -->
+<dialog class="confirm" id="confirm">
+  <form method="dialog" class="confirm__form">
+    <h3 class="confirm__title" id="confirm-title"></h3>
+    <p class="confirm__mode" id="confirm-mode"></p>
+    <ul class="confirm__list" id="confirm-list"></ul>
+    <p class="confirm__warn" id="confirm-warn" hidden></p>
+    <div class="confirm__actions">
+      <button class="btn btn--ghost" value="cancel" data-i18n="confirm.later">Để sau</button>
+      <button class="btn btn--ember" value="ok" id="confirm-ok">Xoá ngay</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Tiến trình dọn -->
+<dialog class="progress" id="progress">
+  <div class="progress__body">
+    <p class="progress__label" id="progress-label"></p>
+    <div class="progress__bar"><span class="progress__fill" id="progress-fill"></span></div>
+    <p class="progress__now mono" id="progress-now"></p>
+    <p class="progress__done" id="progress-done" hidden></p>
+    <button class="btn btn--line" id="progress-close" hidden data-i18n="progress.close">Đóng</button>
+  </div>
+</dialog>
+
+<!-- Cài đặt -->
+<dialog class="settings" id="settings">
+  <form method="dialog" class="settings__form">
+    <h3 class="settings__title" data-i18n="settings.title">Cài đặt</h3>
+
+    <section class="settings__section">
+      <h4 data-i18n="settings.language">Ngôn ngữ</h4>
+      <div class="segmented">
+        <label><input type="radio" name="lang" value="system"><span data-i18n="settings.langSystem">Theo hệ thống</span></label>
+        <label><input type="radio" name="lang" value="vi"><span>Tiếng Việt</span></label>
+        <label><input type="radio" name="lang" value="en"><span>English</span></label>
+      </div>
+    </section>
+
+    <section class="settings__section">
+      <h4 data-i18n="settings.roots">Thư mục dự án để tìm artifact</h4>
+      <p class="settings__hint" data-i18n="settings.rootsHint"></p>
+      <div class="settings__lists">
+        <div>
+          <p class="settings__sub" data-i18n="settings.discovered">Tự phát hiện</p>
+          <ul class="chips" id="roots-discovered"></ul>
+        </div>
+        <div>
+          <p class="settings__sub" data-i18n="settings.extra">Thêm tay</p>
+          <ul class="chips" id="roots-extra"></ul>
+          <button type="button" class="btn btn--line btn--sm" id="set-add-root" data-i18n="settings.addRoot">Thêm thư mục…</button>
+        </div>
+        <div>
+          <p class="settings__sub" data-i18n="settings.excluded">Loại trừ</p>
+          <ul class="chips" id="roots-excluded"></ul>
+          <button type="button" class="btn btn--line btn--sm" id="set-add-excluded" data-i18n="settings.addExcluded">Loại trừ thư mục…</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings__section">
+      <label class="mode">
+        <input type="checkbox" id="set-trash">
+        <span class="mode__box" aria-hidden="true"></span>
+        <span class="mode__text" data-i18n="settings.trashDefault">Mặc định đưa vào Thùng rác khi mở app</span>
+      </label>
+    </section>
+
+    <p class="settings__privacy" data-i18n="settings.privacy"></p>
+
+    <div class="confirm__actions">
+      <button class="btn btn--ghost" value="cancel" data-i18n="settings.cancel">Huỷ</button>
+      <button class="btn btn--amber" value="save" data-i18n="settings.save">Lưu</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/i18n-strings.js"></script>
+<script src="js/format-bytes-and-dates.js"></script>
+<script src="js/ledger-view-and-rows.js" defer></script>
+<script src="js/settings-dialog.js" defer></script>
+<script src="js/slclean-app.js" defer></script>
+</body>
+</html>

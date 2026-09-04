@@ -1,0 +1,8 @@
+!scripts/shots/slclean-real-en.png
+!scripts/shots/slclean-real-vi.png
+!scripts/shots/slclean-settings.png
+node_modules/
+release/
+scripts/shots/*.png
+src-tauri/gen/
+src-tauri/target/

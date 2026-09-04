@@ -1,0 +1,111 @@
+/* Sổ cái: mỗi nhóm là một bảng hàng ngang, cột cỡ file thẳng hàng bên phải,
+   thanh cỡ tương đối nằm dưới tên để mắt so sánh mà không cần đọc số. */
+.group { margin-top: 20px; }
+.group--empty { display: none; }
+
+.group__head {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: baseline;
+  column-gap: 12px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--moss);
+}
+.group__hint { color: var(--dust-dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.group__hint code { font-size: 11px; }
+.group__size { color: var(--bone-dim); font-size: 13px; }
+.group__empty { color: var(--dust-dim); font-size: 13px; padding: 12px 8px; }
+
+.rows { list-style: none; margin: 0; padding: 0; }
+
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color 120ms;
+  animation: row-in var(--dur) var(--ease) both;
+}
+.row:hover { background: var(--moss-2); }
+.row--checked { background: rgba(226, 168, 59, 0.04); }
+.row--zero { opacity: 0.45; }
+.row--gone { opacity: 0.35; text-decoration: line-through; pointer-events: none; }
+
+@keyframes row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.row__main { min-width: 0; display: grid; gap: 2px; }
+.row__title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.row__label { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row__path {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--dust-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+.row__path bdi { direction: ltr; unicode-bidi: isolate; }
+.row__note { font-size: 12px; color: var(--dust); }
+.row__bar {
+  height: 3px;
+  width: var(--rel, 0%);
+  min-width: 2px;
+  background: var(--amber-deep);
+  border-radius: 2px;
+  margin-top: 2px;
+  transition: width var(--dur) var(--ease);
+}
+.row--checked .row__bar { background: var(--amber); }
+
+.row__age { font-size: 12px; color: var(--dust-dim); white-space: nowrap; }
+.row__age--stale { color: var(--sage); }
+
+.row__size {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 8ch;
+  color: var(--bone-dim);
+}
+.row--checked .row__size { color: var(--amber); }
+
+.row__open {
+  background: none; border: 0; color: var(--dust-dim);
+  padding: 4px; border-radius: 4px; line-height: 0;
+  opacity: 0; transition: opacity 120ms, color 120ms;
+}
+.row:hover .row__open, .row__open:focus-visible { opacity: 1; }
+.row__open:hover { color: var(--bone); background: var(--moss-3); }
+.row__open svg { width: 14px; height: 14px; }
+
+/* Ô tick tùy biến */
+.check { display: inline-flex; cursor: pointer; }
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check__box {
+  width: 16px; height: 16px;
+  border: 1px solid var(--dust-dim);
+  border-radius: 3px;
+  background: var(--moss);
+  position: relative;
+  transition: background-color 120ms, border-color 120ms;
+}
+.check input:checked + .check__box { background: var(--amber); border-color: var(--amber); }
+.check input:checked + .check__box::after {
+  content: ""; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
+  border: solid var(--moss); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.check input:indeterminate + .check__box { border-color: var(--amber); }
+.check input:indeterminate + .check__box::after {
+  content: ""; position: absolute; left: 3px; right: 3px; top: 6px; height: 2px; background: var(--amber);
+}
+.check input:disabled + .check__box { opacity: 0.3; cursor: not-allowed; }
+.check--group .check__box { width: 14px; height: 14px; }

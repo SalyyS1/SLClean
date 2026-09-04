@@ -1,0 +1,103 @@
+/* Đầu bảng: con số lớn "có thể giải phóng" bên trái, nút hành động bên phải; thanh tiến trình
+   quét mảnh ngay dưới con số. Ô tìm kiếm nằm trong viewbar cùng các chip lọc. */
+.board__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 28px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background:
+    radial-gradient(ellipse 40% 120% at 0% 50%, rgba(226, 168, 59, 0.07), transparent 70%);
+}
+
+.hero { display: grid; gap: 2px; min-width: 0; }
+.hero__eyebrow {
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dust);
+}
+.hero__value {
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.hero__sub { color: var(--dust); font-size: 13px; max-width: 64ch; margin-top: 4px; }
+
+.scanbar {
+  height: 3px;
+  width: min(100%, 420px);
+  margin-top: 8px;
+  border-radius: 2px;
+  background: var(--moss-3);
+  overflow: hidden;
+}
+.scanbar__fill {
+  display: block;
+  height: 100%;
+  width: var(--pct, 0%);
+  background: linear-gradient(90deg, var(--amber-deep), var(--amber));
+  transition: width 240ms var(--ease);
+}
+
+.btn--amber { background: var(--amber); color: var(--moss); border-color: var(--amber); font-weight: 600; }
+.btn--amber:not(:disabled):hover { background: #edb54d; }
+.btn--sm { padding: 6px 12px; font-size: 12.5px; }
+
+/* Ô tìm kiếm: cùng chiều cao với chip, kính lúp mờ bên trái. */
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 34px;
+  min-width: 220px;
+  flex: 1 1 220px;
+  max-width: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--moss-2);
+  color: var(--dust);
+  transition: border-color 120ms;
+}
+.search:focus-within { border-color: var(--amber); color: var(--bone); }
+.search svg { width: 14px; height: 14px; flex-shrink: 0; }
+.search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: 0;
+  color: var(--bone);
+  font: inherit;
+  font-size: 13px;
+}
+.search input::placeholder { color: var(--dust-dim); }
+.search input::-webkit-search-cancel-button { filter: invert(0.7); cursor: pointer; }
+
+/* Hàng đang đo: số nhấp nháy nhẹ để biết chưa phải kết quả cuối. */
+.row--measuring .row__size { color: var(--dust); animation: measuring-pulse 1.4s ease-in-out infinite; }
+@keyframes measuring-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.tag--measuring { background: var(--moss-3); color: var(--dust); }
+.row__multi { color: var(--dust-dim); font-family: var(--font-body); margin-left: 4px; }
+
+/* Nút đổi ngôn ngữ cạnh tên app. */
+.rail__lang {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dust);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  transition: color 120ms, border-color 120ms;
+}
+.rail__lang:hover { color: var(--bone); border-color: var(--dust); }

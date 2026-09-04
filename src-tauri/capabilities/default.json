@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Cửa sổ chính: gọi lệnh quét/dọn, mở thư mục trong Explorer, chọn thư mục dự án",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "opener:allow-reveal-item-in-dir",
+    "dialog:allow-open"
+  ]
+}

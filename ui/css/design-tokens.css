@@ -1,0 +1,29 @@
+/* Tông "rêu đêm": nền xanh-đen, chữ màu xương, điểm nhấn hổ phách cho dung lượng lấy lại được,
+   đỏ than cho hành động xoá hẳn. Số liệu luôn dùng mono để cột cỡ file thẳng hàng. */
+:root {
+  --moss: #101512;
+  --moss-2: #151b17;
+  --moss-3: #1b231e;
+  --line: #27322b;
+  --line-soft: #1f2823;
+  --bone: #ece6d5;
+  --bone-dim: #c9c3b3;
+  --dust: #8b968d;
+  --dust-dim: #5f6a62;
+  --amber: #e2a83b;
+  --amber-deep: #b7821d;
+  --amber-tint: rgba(226, 168, 59, 0.12);
+  --ember: #d95a43;
+  --ember-tint: rgba(217, 90, 67, 0.14);
+  --sage: #8fb996;
+  --sage-tint: rgba(143, 185, 150, 0.12);
+
+  --font-display: "Bricolage Grotesque", "Be Vietnam Pro", "Segoe UI", sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+
+  --rail-w: 300px;
+  --radius: 6px;
+  --dur: 420ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
