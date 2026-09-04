@@ -105,6 +105,19 @@ impl Usage {
         self.running.iter().any(|p| p.starts_with(&prefix))
     }
 
+    /// (lần cuối, tổng số lần) của đúng một file exe. Dùng cho mục khởi động: mục trỏ tới một
+    /// exe cụ thể, nên gom cả thư mục sẽ gán nhầm lịch sử của hàng xóm — mọi thứ trong System32
+    /// sẽ trông như vừa mở hôm qua.
+    pub fn for_exe(&self, exe: &Path) -> (u64, u32) {
+        let want = lower(exe);
+        self.runs.iter().filter(|r| r.target.to_ascii_lowercase() == want).fold((0, 0), |(l, c), r| (l.max(r.last), c + r.count))
+    }
+
+    pub fn is_exe_running(&self, exe: &Path) -> bool {
+        let want = lower(exe);
+        self.running.iter().any(|p| *p == want)
+    }
+
     /// Tên (không đuôi, chữ thường) của mọi exe đang chạy hoặc đã chạy từ `since` (giây epoch),
     /// để nhận ra thư mục dữ liệu của app portable/không đăng ký mà người dùng vẫn dùng.
     pub fn exe_stems(&self, since: u64) -> Vec<String> {

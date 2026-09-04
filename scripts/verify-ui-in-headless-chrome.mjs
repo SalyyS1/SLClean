@@ -85,6 +85,40 @@ const FAKE = {
   },
 };
 
+// Mục khởi động: đủ cả 5 nguồn, mục đã tắt, mục hỏng (xoá được), mục cần admin, mục của Windows.
+const boot = (id, name, command, source, extra = {}) => ({
+  id, name, command, source, target: extra.target ?? command, enabled: extra.enabled ?? true,
+  last_used: extra.last_used ?? 0, usage_known: extra.usage_known ?? true, running: extra.running ?? false,
+  system: extra.system ?? false, broken: extra.broken ?? false, needs_admin: extra.needs_admin ?? false,
+});
+FAKE.startup = [
+  boot("run:hkcu:0:Steam", "Steam", '"D:\\Game\\Steam\\steam.exe" -silent', "run", { last_used: NOW - 200 * DAY }),
+  boot("run:hkcu:0:Discord", "Discord", '"C:\\Users\\Salyyy\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', "run", { last_used: NOW - 2 * DAY, running: true }),
+  boot("run:hklm:0:SecurityHealth", "SecurityHealth", "C:\\WINDOWS\\system32\\SecurityHealthSystray.exe", "runmachine", { system: true, needs_admin: true, last_used: NOW - DAY }),
+  boot("run:hklm:1:RadminVPN", "RadminVPN", '"C:\\Program Files (x86)\\Radmin VPN\\RvRvpnGui.exe" /minimized', "runmachine", { enabled: false, needs_admin: true }),
+  boot("folder:0:EVKey64.lnk", "EVKey64", "C:\\Users\\Salyyy\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\EVKey64.lnk", "folder", { last_used: NOW - DAY }),
+  boot("folder:1:Tailscale.lnk", "Tailscale", "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Tailscale.lnk", "foldermachine", { enabled: false, needs_admin: true, last_used: NOW - 60 * DAY }),
+  boot("run:hkcu:0:Spotify", "Spotify", '"C:\\Users\\Salyyy\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart', "run", { enabled: false, broken: true, target: null, usage_known: false }),
+  boot("task:\\gxx speed launcher", "gxx speed launcher", "C:\\Program Files (x86)\\Garena\\Garena\\Garena.exe -silentlaunch", "task", { enabled: false, last_used: NOW - 120 * DAY }),
+];
+
+// Mốc nhật ký "ba ngày trước": vài mục cố tình lệch so với lần quét sắp tới để tab Nhật ký có
+// đủ cả phình ra, nhỏ lại, mới xuất hiện (npm-cache bị bỏ khỏi mốc cũ) và không còn (left:old).
+const WAS = { "wu-download": 4.0 * GB, "modrinth-meta": 3.5 * GB, "user-temp": 1.6 * GB };
+FAKE.history = [
+  {
+    at: NOW - 3 * DAY,
+    drives: [
+      { mount: "C:", free: 9.9 * GB, total: 119.8 * GB },
+      { mount: "D:", free: 1.4 * GB, total: 117.2 * GB },
+    ],
+    items: FAKE.catalog
+      .filter((c) => c.bytes > 0 && c.id !== "npm-cache")
+      .map((c) => ({ id: c.id, vi: c.label.vi, en: c.label.en, group: c.group, bytes: WAS[c.id] ?? c.bytes }))
+      .concat([{ id: "left:old", vi: "Thư mục đã xoá", en: "Deleted folder", group: "temp", bytes: 0.2 * GB }]),
+  },
+];
+
 const browser = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 const errors = [];
@@ -97,6 +131,38 @@ await page.addInitScript((fake) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let settings = { ...fake.settings };
   window.__FAKE_SETTINGS = () => settings;
+  // Nhật ký giả: giữ nguyên luật của backend (mốc cùng ngày thay thế mốc cuối) để UI gặp đúng
+  // số mốc mà app thật sẽ đưa ra.
+  const startup = fake.startup.map((e) => ({ ...e }));
+  window.__FAKE_STARTUP = () => startup;
+  let history = fake.history.map((s) => ({ ...s, items: s.items.map((i) => ({ ...i })) }));
+  window.__FAKE_HISTORY = () => history;
+  const dayOf = (at) => Math.floor(at / 86400);
+  const fakeDiff = (from, to) => {
+    const before = new Map(from.items.map((i) => [i.id, i]));
+    const after = new Map(to.items.map((i) => [i.id, i]));
+    const changes = [];
+    for (const [id, b] of before) {
+      const a = after.get(id);
+      if (a && a.bytes === b.bytes) continue;
+      const src = a || b;
+      changes.push({ id, vi: src.vi, en: src.en, group: src.group, before: b.bytes, after: a ? a.bytes : null, delta: (a ? a.bytes : 0) - b.bytes });
+    }
+    for (const [id, a] of after) {
+      if (before.has(id)) continue;
+      changes.push({ id, vi: a.vi, en: a.en, group: a.group, before: null, after: a.bytes, delta: a.bytes });
+    }
+    changes.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+    const sum = (s) => s.items.reduce((n, i) => n + i.bytes, 0);
+    const drives = to.drives
+      .map((d) => {
+        const b = from.drives.find((x) => x.mount === d.mount);
+        return b ? { mount: d.mount, before: b.free, after: d.free, delta: d.free - b.free } : null;
+      })
+      .filter(Boolean)
+      .sort((x, y) => x.mount.localeCompare(y.mount));
+    return { from: from.at, to: to.at, total_delta: sum(to) - sum(from), drives, changes };
+  };
   window.__TAURI__ = {
     core: {
       async invoke(cmd, args) {
@@ -154,6 +220,35 @@ await page.addInitScript((fake) => {
             if (!a) throw "missing";
             if (a.needs_admin) throw "needs-admin";
             return { gone: true, leftover_dir: null, freed: args.deleteFolder && a.folder_exists ? 1234 : 0 };
+          }
+          case "scan_startup": { await sleep(30); return startup; }
+          case "set_startup_enabled": {
+            const e = startup.find((x) => x.id === args.id);
+            if (!e) throw "bad-id";
+            // Mục thuộc về cả máy thì bản không có admin không đổi được — giống hệt app thật.
+            if (e.needs_admin) throw "needs-admin";
+            e.enabled = args.enabled;
+            return null;
+          }
+          case "remove_startup_entry": {
+            const i = startup.findIndex((x) => x.id === args.id);
+            if (i < 0) throw "bad-id";
+            if (startup[i].needs_admin) throw "needs-admin";
+            startup.splice(i, 1);
+            return null;
+          }
+          case "record_snapshot": {
+            const at = Math.floor(Date.now() / 1000);
+            if (history.length && dayOf(history[history.length - 1].at) === dayOf(at)) history.pop();
+            history.push({ at, drives: fake.drives.map((d) => ({ mount: d.mount, free: d.free, total: d.total })), items: args.items });
+            return null;
+          }
+          case "history_list": return history.map((s) => ({ at: s.at, items: s.items.length, bytes: s.items.reduce((n, i) => n + i.bytes, 0), drives: s.drives }));
+          case "history_diff": {
+            const from = history.find((s) => s.at === args.from);
+            const to = history.find((s) => s.at === args.to);
+            if (!from || !to) throw "snapshot-missing";
+            return fakeDiff(from, to);
           }
           case "recycle_bin_info": return { items: 3, bytes: 120 * 1024 * 1024 };
           case "empty_recycle_bin": return { items: 3, bytes: 120 * 1024 * 1024 };
@@ -335,7 +430,75 @@ await scanned();
 const leftRowsAfterRescan = await page.evaluate(() => [...items.values()].filter((i) => i.group === "leftover").length);
 const tabStored = await page.evaluate(() => localStorage.getItem("slclean-tab"));
 
+// Tab Khởi động: quét lười, công tắc tắt/bật, mục cần admin bị chặn, mục hỏng xoá được.
+await page.click('[data-tab="startup"]');
+await page.waitForFunction(() => document.querySelectorAll(".boot").length >= 8, null, { timeout: 15000 });
+const startHero = await page.locator("#start-hero").textContent();
+const startSub = await page.locator("#start-sub").textContent();
+const startBadge = await page.locator("#badge-startup").textContent();
+const startRows = await page.evaluate(() => [...document.querySelectorAll(".boot")].map((r) => ({
+  name: r.querySelector(".app__name").textContent, tags: [...r.querySelectorAll(".tag")].map((t) => t.textContent),
+  used: r.querySelector(".app__col b").textContent, on: r.querySelector('input[data-act="toggle"]').checked, off: r.classList.contains("boot--off"),
+})));
+await page.screenshot({ path: path.join(shots, "slclean-startup.png") });
+// "Lâu không dùng" = đang bật + có bản ghi mở + hơn 30 ngày. Phải kiểm trước khi tắt Steam,
+// vì mục đã tắt thì không còn là ứng viên để tắt nữa.
+await page.click('[data-start-filter="stale"]');
+const staleRows = await page.evaluate(() => [...document.querySelectorAll(".boot .app__name")].map((e) => e.textContent));
+await page.click('[data-start-filter="all"]');
+// Bấm vào thanh trượt như người dùng thật, không phải vào ô kiểm bị ẩn dưới nó.
+const flip = (id) => page.locator(`.boot[data-start="${id}"] .switch__track`).click();
+// Tắt một mục của người dùng: công tắc phải giữ trạng thái mới và tổng phải giảm.
+await flip("run:hkcu:0:Steam");
+await page.waitForTimeout(250);
+const steamAfter = await page.evaluate(() => window.__FAKE_STARTUP().find((e) => e.id === "run:hkcu:0:Steam").enabled);
+const startHeroAfterOff = await page.locator("#start-hero").textContent();
+const toastOff = await page.locator("#toast").textContent();
+// Mục cần admin: lệnh thất bại, công tắc phải bật về trạng thái thật chứ không giữ vị trí người dùng vừa kéo.
+await flip("run:hklm:0:SecurityHealth");
+await page.waitForTimeout(250);
+const adminToast = await page.locator("#toast").textContent();
+const adminStillOn = await page.locator('.boot[data-start="run:hklm:0:SecurityHealth"] input[data-act="toggle"]').isChecked();
+// Bộ lọc "hỏng" và xoá mục hỏng qua hộp hỏi.
+await page.click('[data-start-filter="broken"]');
+const brokenRows = await page.evaluate(() => [...document.querySelectorAll(".boot .app__name")].map((e) => e.textContent));
+await page.locator('.boot[data-start="run:hkcu:0:Spotify"] [data-act="remove"]').click();
+await page.waitForSelector("#ask[open]");
+const askStartTitle = await page.locator("#ask-title").textContent();
+await page.click("#ask-ok");
+await page.waitForTimeout(300);
+const startupAfterRemove = await page.evaluate(() => window.__FAKE_STARTUP().length);
+const startBadgeAfter = await page.evaluate(() => document.querySelector("#badge-startup").hidden);
+// Steam vừa bị tắt nên không còn nằm trong "lâu không dùng" nữa.
+await page.click('[data-start-filter="stale"]');
+const staleAfterOff = await page.evaluate(() => [...document.querySelectorAll(".boot .app__name")].map((e) => e.textContent));
+await page.click('[data-start-filter="all"]');
+
+// Tab Nhật ký: các lần quét ở trên đã ghi mốc hôm nay, so với mốc giả ba ngày trước.
+const snapsRecorded = await page.evaluate(() => window.__FAKE_HISTORY().length);
+await page.click('[data-tab="history"]');
+await page.waitForFunction(() => document.querySelectorAll("#hist-list .drift__row").length > 0, null, { timeout: 10000 });
+const histHero = await page.locator("#hist-hero").textContent();
+const histSub = await page.locator("#hist-sub").textContent();
+const histDrives = await page.evaluate(() => [...document.querySelectorAll("#hist-drives .drift__row")].map((r) => ({ label: r.querySelector(".drift__label").textContent.trim(), delta: r.querySelector(".drift__delta").textContent, bad: r.classList.contains("drift__row--bad") })));
+const histRows = await page.evaluate(() => [...document.querySelectorAll("#hist-list .drift__row")].map((r) => ({ label: r.querySelector(".drift__label").textContent.trim(), span: r.querySelector(".drift__span").textContent, delta: r.querySelector(".drift__delta").textContent, up: r.classList.contains("drift__row--up"), rel: r.style.getPropertyValue("--rel") })));
+await page.screenshot({ path: path.join(shots, "slclean-history.png") });
+await page.click('[data-hist-filter="grew"]');
+const histGrew = await page.evaluate(() => [...document.querySelectorAll("#hist-list .drift__row .drift__delta")].map((e) => e.textContent));
+await page.click('[data-hist-filter="new"]');
+const histNew = await page.evaluate(() => [...document.querySelectorAll("#hist-list .drift__row .drift__label")].map((e) => e.textContent.trim()));
+const histHint = await page.locator("#hist-hint").textContent();
+await page.click('[data-hist-filter="all"]');
+// Chuyển tiếng Anh: nhãn mục trong nhật ký phải đổi theo vì mốc lưu cả hai ngôn ngữ.
+await page.click("#btn-lang");
+await page.waitForTimeout(120);
+const histRowsEn = await page.evaluate(() => [...document.querySelectorAll("#hist-list .drift__label")].map((e) => e.textContent.trim()).slice(0, 3));
+await page.click("#btn-lang");
+await page.waitForTimeout(120);
+
 console.log(JSON.stringify({ fonts, rowsCount, heroBytes, tallyAfterScan, measuringLeft, searchRows, groupCounts, enTexts, langSaved, chipCount, savedRoots, toastText, tallyRebuild, gainD, confirmTitle, doneText, nowText, goneRows, tallyAfterClean, quickTitle, overflow,
   appsHero, appsSub, appsOrder, appsBadge, appsLastUsed, neverRows, componentRows, deadRows, deadLocked, askDeadTitle, askDeadOptionHidden, toastDead, appsBadgeAfter, askUninstallTitle, askLeftoverTitle, askLeftoverPath, toastLeftover, blockbenchGone, paintUninstallDisabled, appsSearchRows,
-  leftHero, leftBadge, leftRows, tallyLeftover, cleanBadge, leftoverConfirmTitle, leftoverDoneText, leftoverGoneRows, leftPackagesRows, leftRowsAfterRescan, tabStored, errors }, null, 2));
+  leftHero, leftBadge, leftRows, tallyLeftover, cleanBadge, leftoverConfirmTitle, leftoverDoneText, leftoverGoneRows, leftPackagesRows, leftRowsAfterRescan, tabStored,
+  startHero, startSub, startBadge, startRows, steamAfter, startHeroAfterOff, toastOff, adminToast, adminStillOn, brokenRows, askStartTitle, startupAfterRemove, startBadgeAfter, staleRows, staleAfterOff,
+  snapsRecorded, histHero, histSub, histDrives, histRows, histGrew, histNew, histHint, histRowsEn, errors }, null, 2));
 await browser.close();

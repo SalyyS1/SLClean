@@ -1,0 +1,69 @@
+/* Tab Nhật ký: dòng "trôi dạt" dung lượng giữa hai mốc. Thanh tỉ lệ nằm dưới mỗi dòng cho thấy
+   thay đổi này lớn cỡ nào so với thay đổi lớn nhất, để mắt bắt ngay thủ phạm. */
+
+.drift { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 2px; }
+
+.drift__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 18px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+/* Thanh tỉ lệ nằm đè lên đường kẻ dưới cùng của hàng, không phải ngay dưới chữ, để mắt đọc là
+   "phần của hàng này" chứ không phải gạch chân nhãn. */
+.drift__row::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: -1px;
+  height: 2px;
+  width: var(--rel, 0%);
+  background: var(--dust-dim);
+  transition: width var(--dur) var(--ease);
+}
+.drift__row--up::after { background: var(--ember); }
+.drift__row--down::after { background: var(--sage); }
+.drift__row--bad::after { background: var(--ember); width: 100%; }
+.drift__row--good::after { background: var(--sage); width: 100%; }
+
+.drift__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.drift__label small { color: var(--dust-dim); font-weight: 400; font-size: 12px; }
+.drift__label .tag { margin-left: 8px; }
+.drift__span { font-family: var(--font-mono); font-size: 12px; color: var(--dust); white-space: nowrap; }
+.drift__delta {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  min-width: 10ch;
+  text-align: right;
+  color: var(--bone-dim);
+}
+.drift__row--up .drift__delta { color: var(--ember); }
+.drift__row--down .drift__delta { color: var(--sage); }
+.drift__row--bad .drift__delta { color: var(--ember); }
+.drift__row--good .drift__delta { color: var(--sage); }
+
+/* Ổ đĩa đứng riêng ở đầu: nền đậm hơn để tách khỏi danh sách mục. */
+.drift__drive { background: var(--moss-2); border-bottom-color: var(--line); }
+.drift__drive .drift__label { font-family: var(--font-mono); }
+
+.tag--new { background: var(--amber-tint); color: var(--amber); }
+.tag--gone { background: var(--moss-3); color: var(--dust-dim); }
+
+/* Ổ đĩa đầy thêm là tin xấu: số lớn ở hero tô đỏ thay vì hổ phách. */
+.hero__value--up { color: var(--ember); }
+
+.hist__pick { display: grid; gap: 4px; font-size: 12px; color: var(--dust); }
+.hist__pick select {
+  font: inherit;
+  font-family: var(--font-mono);
+  color: var(--bone);
+  background: var(--moss-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+}
+.hist__pick select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.hist__pick select:disabled { color: var(--dust-dim); }

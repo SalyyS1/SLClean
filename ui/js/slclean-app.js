@@ -16,6 +16,7 @@ function setLanguage(next) {
   $("#btn-lang").textContent = lang === "vi" ? "EN" : "VI";
   renderAll();
   renderApps();
+  renderHistory();
   loadDrives();
   loadRecycle();
 }
@@ -106,6 +107,7 @@ function catalogItem(c, measuring) {
 async function scan() {
   if (scanning) return;
   scanning = true;
+  scanCancelled = false;
   for (const [k, it] of items) if (it.group !== "leftover") items.delete(k);
   Object.assign(scanStats, { total: 0, done: 0, artifacts: 0 });
   renderAll();
@@ -149,6 +151,9 @@ async function scan() {
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     $("#scan-status").textContent = t("rail.scanDone", { s: secs, n: [...items.values()].filter((i) => i.group !== "leftover").length });
     if (scanStats.artifacts === 0) $("#empty-artifacts").textContent = t("artifacts.none");
+    // Chỉ lần quét trọn vẹn mới được ghi mốc: quét dở dang cho số nhỏ giả, lần sau sẽ trông
+    // như dung lượng vừa phình lên.
+    if (!scanCancelled) await recordSnapshot();
   } catch (err) {
     $("#scan-status").textContent = t("rail.scanError", { e: err });
   } finally {
@@ -286,7 +291,7 @@ function pick(mode) {
 
 // ---------- Sự kiện ----------
 $("#btn-scan").addEventListener("click", scan);
-$("#btn-cancel").addEventListener("click", () => invoke("cancel_scan"));
+$("#btn-cancel").addEventListener("click", () => { scanCancelled = true; invoke("cancel_scan"); });
 $("#btn-clean").addEventListener("click", openConfirm);
 $("#btn-quick").addEventListener("click", () => { pick("safe"); openConfirm(); });
 $("#confirm").addEventListener("close", () => { if ($("#confirm").returnValue === "ok") runClean(); });

@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="css/hero-search-and-scanbar.css">
   <link rel="stylesheet" href="css/ledger-rows.css">
   <link rel="stylesheet" href="css/apps-and-leftovers.css">
+  <link rel="stylesheet" href="css/startup-entries.css">
+  <link rel="stylesheet" href="css/storage-history.css">
   <link rel="stylesheet" href="css/dialog-and-toast.css">
   <link rel="stylesheet" href="css/settings-dialog.css">
 </head>
@@ -81,6 +83,14 @@
       <button class="tab" role="tab" data-tab="leftovers" aria-selected="false">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v6.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5z"/><path d="M6 9.5h4" stroke-dasharray="1.5 1.5"/></svg>
         <span data-i18n="tab.leftovers">Thư mục thừa</span><b class="tab__badge" id="badge-leftovers" hidden></b>
+      </button>
+      <button class="tab" role="tab" data-tab="startup" aria-selected="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2v6"/><path d="M4.8 4.4a5 5 0 1 0 6.4 0"/></svg>
+        <span data-i18n="tab.startup">Khởi động</span><b class="tab__badge" id="badge-startup" hidden></b>
+      </button>
+      <button class="tab" role="tab" data-tab="history" aria-selected="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 4v4l2.5 1.5"/><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9"/><path d="M2 3v2.5h2.5"/></svg>
+        <span data-i18n="tab.history">Nhật ký</span><b class="tab__badge" id="badge-history" hidden></b>
       </button>
     </div>
   </nav>
@@ -313,6 +323,75 @@
       <p class="board__note" data-i18n="left.note"></p>
     </div>
   </section>
+
+  <!-- ===== Tab Khởi động: mục tự chạy cùng Windows ===== -->
+  <section class="pane" id="pane-startup" role="tabpanel" hidden>
+    <header class="board__head">
+      <div class="hero">
+        <p class="hero__eyebrow" data-i18n="start.eyebrow">Tự chạy cùng Windows</p>
+        <p class="hero__value mono" id="start-hero">—</p>
+        <p class="hero__sub" id="start-sub" data-i18n="start.subIdle">Mục trong Run, thư mục Startup và scheduled task. Tắt là mục vẫn nằm nguyên, bật lại lúc nào cũng được.</p>
+        <div class="scanbar" id="start-scanbar" hidden><span class="scanbar__fill" id="start-scanbar-fill"></span></div>
+      </div>
+      <div class="board__tools">
+        <button class="btn btn--line" id="btn-start-scan" data-i18n="board.rescan">Quét lại</button>
+      </div>
+    </header>
+
+    <div class="viewbar">
+      <label class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+        <input type="search" id="start-search" data-i18n-placeholder="start.search" placeholder="Tìm theo tên hoặc lệnh…" spellcheck="false" autocomplete="off">
+      </label>
+      <div class="quick" role="group">
+        <button class="quick__btn" data-start-filter="all" data-i18n="filter.all">Tất cả</button>
+        <button class="quick__btn" data-start-filter="on" data-i18n="start.filterOn">Đang bật</button>
+        <button class="quick__btn" data-start-filter="stale" data-i18n="start.filterStale">Lâu không dùng</button>
+        <button class="quick__btn" data-start-filter="broken" data-i18n="start.filterBroken">Hỏng</button>
+      </div>
+      <p class="viewbar__hint" id="start-hint"></p>
+    </div>
+
+    <div class="board__scroll" id="start-board">
+      <ol class="rows" id="start-list"></ol>
+      <p class="group__empty" id="start-empty" hidden></p>
+      <p class="board__note" data-i18n="start.note"></p>
+    </div>
+  </section>
+
+  <!-- ===== Tab Nhật ký: so hai lần quét ===== -->
+  <section class="pane" id="pane-history" role="tabpanel" hidden>
+    <header class="board__head">
+      <div class="hero">
+        <p class="hero__eyebrow" data-i18n="hist.eyebrow">Ổ đĩa thay đổi thế nào</p>
+        <p class="hero__value mono" id="hist-hero">—</p>
+        <p class="hero__sub" id="hist-sub" data-i18n="hist.subIdle">Mỗi lần quét xong, SLClean ghi lại cỡ của từng mục. Chọn hai mốc để xem cái gì đã phình ra.</p>
+      </div>
+      <div class="board__tools">
+        <label class="hist__pick">
+          <span data-i18n="hist.compareFrom">So với</span>
+          <select id="hist-from"></select>
+        </label>
+      </div>
+    </header>
+
+    <div class="viewbar">
+      <div class="quick" role="group">
+        <button class="quick__btn" data-hist-filter="all" data-i18n="filter.all">Tất cả</button>
+        <button class="quick__btn" data-hist-filter="grew" data-i18n="hist.filterGrew">Phình ra</button>
+        <button class="quick__btn" data-hist-filter="shrank" data-i18n="hist.filterShrank">Nhỏ lại</button>
+        <button class="quick__btn" data-hist-filter="new" data-i18n="hist.filterNew">Mới xuất hiện</button>
+      </div>
+      <p class="viewbar__hint" id="hist-hint"></p>
+    </div>
+
+    <div class="board__scroll" id="hist-board">
+      <ul class="drift" id="hist-drives"></ul>
+      <ol class="drift" id="hist-list"></ol>
+      <p class="group__empty" id="hist-empty" hidden></p>
+      <p class="board__note" data-i18n="hist.note"></p>
+    </div>
+  </section>
 </main>
 
 <!-- Xác nhận trước khi xoá -->
@@ -419,6 +498,8 @@
 <script src="js/tabs-and-ask-dialog.js" defer></script>
 <script src="js/apps-tab.js" defer></script>
 <script src="js/leftovers-tab.js" defer></script>
+<script src="js/startup-tab.js" defer></script>
+<script src="js/history-tab.js" defer></script>
 <script src="js/slclean-app.js" defer></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ mod catalog_specs;
 mod cleaner;
 mod drives;
 mod elevation;
+mod history;
 mod installed_apps;
 mod leftovers;
 mod parallel;
@@ -20,10 +21,11 @@ mod settings;
 mod shortcuts;
 mod single_instance;
 mod sizer;
+mod startup;
 mod store_apps;
 mod user_assist;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -287,6 +289,69 @@ async fn scan_leftovers(app: AppHandle, state: State<'_, ScanState>) -> Result<V
     .map_err(|e| e.to_string())
 }
 
+/// Tab Khởi động: mục tự chạy cùng Windows từ Run, thư mục Startup và scheduled task.
+/// Chỉ đọc registry + một lần gọi `schtasks` nên nhanh, không cần phát event tiến độ.
+#[tauri::command]
+async fn scan_startup() -> Result<Vec<startup::StartupEntry>, String> {
+    tauri::async_runtime::spawn_blocking(|| startup::discover(&apps::Usage::collect())).await.map_err(|e| e.to_string())
+}
+
+/// Bật/tắt một mục khởi động. Không xoá gì; bật lại được, kể cả bằng Task Manager.
+#[tauri::command]
+async fn set_startup_enabled(id: String, enabled: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || startup::set_enabled(&id, enabled)).await.map_err(|e| e.to_string())?
+}
+
+/// Xoá hẳn một mục khởi động hỏng (lệnh trỏ tới file không còn).
+#[tauri::command]
+async fn remove_startup_entry(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || startup::remove(&id)).await.map_err(|e| e.to_string())?
+}
+
+/// Một mục UI gửi lên để ghi vào mốc nhật ký.
+#[derive(Deserialize)]
+pub struct SnapInput {
+    pub id: String,
+    pub vi: String,
+    pub en: String,
+    pub group: String,
+    pub bytes: u64,
+}
+
+/// Ghi một mốc nhật ký sau khi quét xong trọn vẹn. UI gọi lệnh này chứ không phải backend tự
+/// ghi, vì chỉ UI biết cả hai pha quét (danh mục + artifact) đã xong và không bị huỷ giữa chừng.
+#[tauri::command]
+async fn record_snapshot(app: AppHandle, items: Vec<SnapInput>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let drives = drives::list_drives().into_iter().map(|d| history::DriveFree { mount: d.mount, free: d.free, total: d.total }).collect();
+        let items = items.into_iter().map(|i| history::SnapItem { id: i.id, vi: i.vi, en: i.en, group: i.group, bytes: i.bytes }).collect();
+        let mut h = history::load(&app);
+        history::push(&mut h, history::Snapshot { at, drives, items });
+        history::save(&app, &h)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Danh sách mốc đã ghi (không kèm chi tiết từng mục) để UI cho chọn hai mốc so sánh.
+#[tauri::command]
+async fn history_list(app: AppHandle) -> Result<Vec<history::SnapshotInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || history::list(&history::load(&app))).await.map_err(|e| e.to_string())
+}
+
+/// So hai mốc theo thời điểm (`at`). Thiếu một trong hai mốc → lỗi ngắn cho UI dịch.
+#[tauri::command]
+async fn history_diff(app: AppHandle, from: u64, to: u64) -> Result<history::Diff, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let h = history::load(&app);
+        let find = |at: u64| h.snapshots.iter().find(|s| s.at == at).cloned().ok_or_else(|| "snapshot-missing".to_string());
+        Ok(history::diff(&find(from)?, &find(to)?))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Hộp thoại chọn thư mục của hệ điều hành; None nếu người dùng huỷ.
 #[tauri::command]
 async fn pick_folder(app: AppHandle, title: String) -> Result<Option<PathBuf>, String> {
@@ -332,7 +397,13 @@ pub fn run() {
             scan_apps,
             uninstall_app,
             remove_dead_app,
-            scan_leftovers
+            scan_leftovers,
+            scan_startup,
+            set_startup_enabled,
+            remove_startup_entry,
+            record_snapshot,
+            history_list,
+            history_diff
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

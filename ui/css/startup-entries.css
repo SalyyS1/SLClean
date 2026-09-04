@@ -1,0 +1,65 @@
+/* Tab Khởi động: mỗi mục một hàng có tên + nguồn, dòng lệnh sẽ chạy, lần mở cuối và công tắc.
+   Không có ô tick như tab Dọn dẹp: ở đây hành động là bật/tắt từng mục, không phải dọn hàng loạt. */
+.boot {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  column-gap: 16px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color 120ms;
+  animation: row-in var(--dur) var(--ease) both;
+}
+.boot:hover { background: var(--moss-2); }
+/* Mục đã tắt vẫn hiện đủ thông tin, chỉ nhạt đi để mắt lướt qua nhóm đang bật trước. */
+.boot--off .boot__main { opacity: 0.55; }
+
+.boot__main { min-width: 0; display: grid; gap: 3px; }
+.boot__cmd {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--dust-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  direction: rtl; text-align: left;
+}
+.boot__cmd bdi { direction: ltr; unicode-bidi: isolate; }
+
+/* Cột lần mở cuối và cột hành động cố định bề rộng: công tắc của mọi hàng phải thẳng một cột,
+   nếu không mắt phải đi tìm nó ở mỗi hàng. */
+.boot > .app__col { min-width: 11ch; }
+.boot__actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 15ch; }
+
+.tag--src { background: var(--moss-3); color: var(--dust); }
+
+/* Công tắc: hộp kiểm thật (bàn phím và trình đọc màn hình dùng được), vẽ lại thành thanh trượt. */
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch__track {
+  position: relative;
+  width: 34px; height: 19px;
+  border-radius: 999px;
+  background: var(--moss-3);
+  border: 1px solid var(--line);
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--dust);
+  transition: transform var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.switch input:checked + .switch__track { background: var(--sage-tint); border-color: var(--sage); }
+.switch input:checked + .switch__track::after { transform: translateX(15px); background: var(--sage); }
+.switch input:focus-visible + .switch__track { outline: 2px solid var(--amber); outline-offset: 2px; }
+.switch__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dust-dim);
+  min-width: 4ch;
+}
+.switch input:checked ~ .switch__label { color: var(--sage); }

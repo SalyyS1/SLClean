@@ -1,6 +1,6 @@
-//! Đọc và xoá registry qua advapi32 trực tiếp, chỉ những gì app cần: mở khoá, liệt kê khoá
-//! con và tên giá trị, đọc chuỗi/số/nhị phân, giờ ghi cuối của khoá, xoá cả nhánh. Không kéo
-//! thêm crate vì phần này nhỏ và ổn định.
+//! Đọc và ghi registry qua advapi32 trực tiếp, chỉ những gì app cần: mở/tạo khoá, liệt kê khoá
+//! con và tên giá trị, đọc chuỗi/số/nhị phân, ghi giá trị nhị phân, giờ ghi cuối của khoá, xoá
+//! cả nhánh. Không kéo thêm crate vì phần này nhỏ và ổn định.
 
 use std::os::windows::ffi::OsStringExt;
 
@@ -9,12 +9,14 @@ pub const HKEY_CURRENT_USER: Hkey = 0x8000_0001u32 as i32 as isize;
 pub const HKEY_LOCAL_MACHINE: Hkey = 0x8000_0002u32 as i32 as isize;
 
 const KEY_READ: u32 = 0x2_0019;
+const KEY_SET_VALUE: u32 = 0x0002;
 const ERROR_SUCCESS: i32 = 0;
 const ERROR_NO_MORE_ITEMS: i32 = 259;
 const ERROR_MORE_DATA: i32 = 234;
 const REG_SZ: u32 = 1;
 const REG_EXPAND_SZ: u32 = 2;
 const REG_DWORD: u32 = 4;
+const REG_BINARY: u32 = 3;
 
 #[repr(C)]
 #[derive(Default)]
@@ -32,6 +34,9 @@ extern "system" {
     fn RegQueryValueExW(hkey: Hkey, name: *const u16, reserved: *const u32, vtype: *mut u32, data: *mut u8, data_len: *mut u32) -> i32;
     fn RegQueryInfoKeyW(hkey: Hkey, class: *mut u16, class_len: *mut u32, reserved: *const u32, subkeys: *mut u32, max_subkey: *mut u32, max_class: *mut u32, values: *mut u32, max_value_name: *mut u32, max_value: *mut u32, security: *mut u32, last_write: *mut FileTime) -> i32;
     fn RegDeleteTreeW(hkey: Hkey, sub: *const u16) -> i32;
+    fn RegCreateKeyExW(hkey: Hkey, sub: *const u16, reserved: u32, class: *const u16, options: u32, sam: u32, security: *const u8, out: *mut Hkey, disposition: *mut u32) -> i32;
+    fn RegSetValueExW(hkey: Hkey, name: *const u16, reserved: u32, vtype: u32, data: *const u8, len: u32) -> i32;
+    fn RegDeleteValueW(hkey: Hkey, name: *const u16) -> i32;
 }
 
 pub fn wide(s: &str) -> Vec<u16> {
@@ -95,6 +100,13 @@ pub fn open(root: Hkey, sub: &str) -> Option<Key> {
     let mut h: Hkey = 0;
     let rc = unsafe { RegOpenKeyExW(root, wide(sub).as_ptr(), 0, KEY_READ, &mut h) };
     (rc == ERROR_SUCCESS).then_some(Key(h))
+}
+
+/// Mở khoá để ghi, tạo nếu chưa có. Err(5) = không có quyền (HKLM cần admin).
+pub fn create_writable(root: Hkey, sub: &str) -> Result<Key, i32> {
+    let mut h: Hkey = 0;
+    let rc = unsafe { RegCreateKeyExW(root, wide(sub).as_ptr(), 0, std::ptr::null(), 0, KEY_READ | KEY_SET_VALUE, std::ptr::null(), &mut h, std::ptr::null_mut()) };
+    if rc == ERROR_SUCCESS { Ok(Key(h)) } else { Err(rc) }
 }
 
 impl Key {
@@ -172,6 +184,19 @@ impl Key {
         self.raw(name).map(|(_, d)| d)
     }
 
+    /// Ghi một giá trị REG_BINARY. Khoá phải được mở qua `create_writable`.
+    pub fn set_binary(&self, name: &str, data: &[u8]) -> Result<(), i32> {
+        let rc = unsafe { RegSetValueExW(self.0, wide(name).as_ptr(), 0, REG_BINARY, data.as_ptr(), data.len() as u32) };
+        if rc == ERROR_SUCCESS { Ok(()) } else { Err(rc) }
+    }
+
+    /// Xoá một giá trị. Giá trị không tồn tại cũng coi như xong. Khoá phải mở qua `create_writable`.
+    pub fn delete_value(&self, name: &str) -> Result<(), i32> {
+        const ERROR_FILE_NOT_FOUND: i32 = 2;
+        let rc = unsafe { RegDeleteValueW(self.0, wide(name).as_ptr()) };
+        if rc == ERROR_SUCCESS || rc == ERROR_FILE_NOT_FOUND { Ok(()) } else { Err(rc) }
+    }
+
     /// Giờ ghi cuối của khoá (giây epoch); dùng làm ngày cài đặt dự phòng.
     pub fn last_write_epoch(&self) -> Option<u64> {
         let mut ft = FileTime::default();
@@ -205,6 +230,24 @@ mod tests {
         // 2026-01-01T00:00:00Z = 1767225600 epoch = 134_116_992_000_000_000 FILETIME.
         assert_eq!(filetime_to_epoch(134_116_992_000_000_000), 1_767_225_600);
         assert_eq!(filetime_to_epoch(0), 0);
+    }
+
+    #[test]
+    fn creates_writes_reads_and_deletes_a_throwaway_key() {
+        const SUB: &str = r"Software\SLCleanTest\RegistryRoundTrip";
+        let _ = delete_tree(HKEY_CURRENT_USER, SUB);
+        let k = create_writable(HKEY_CURRENT_USER, SUB).expect("tạo khoá dưới HKCU");
+        k.set_binary("flag", &[2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).expect("ghi nhị phân");
+        assert_eq!(k.binary("flag").as_deref(), Some(&[2u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][..]));
+        // Ghi đè giá trị đã có (đúng cách bật/tắt mục khởi động hoạt động).
+        k.set_binary("flag", &[3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).expect("ghi đè");
+        assert_eq!(k.binary("flag").map(|d| d[0]), Some(3));
+        k.delete_value("flag").expect("xoá giá trị");
+        assert!(k.binary("flag").is_none(), "giá trị phải biến mất");
+        k.delete_value("flag").expect("xoá giá trị không còn cũng coi như xong");
+        drop(k);
+        delete_tree(HKEY_CURRENT_USER, r"Software\SLCleanTest").expect("xoá khoá thử");
+        assert!(open(HKEY_CURRENT_USER, SUB).is_none(), "khoá thử phải biến mất");
     }
 
     #[test]

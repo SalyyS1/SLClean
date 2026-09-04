@@ -9,6 +9,8 @@ const GROUPS = ["artifacts", "ai", "package", "editor", "browser", "app", "game"
 /** id → { id, group, label, note, path, paths, bytes, safety, keepRoot, needsAdmin, checked, gone, partial, age, measuring } */
 const items = new Map();
 let scanning = false;
+/** Người dùng đã bấm Huỷ trong lần quét này; số đo dở dang không được ghi vào nhật ký. */
+let scanCancelled = false;
 /** Tab Thư mục thừa đang quét (mục group "leftover" nằm chung trong `items`). */
 let leftScanning = false;
 /** App có đang chạy với quyền admin không; set một lần lúc khởi động. */
