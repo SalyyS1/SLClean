@@ -13,7 +13,18 @@ const shots = path.join(here, "shots");
 await mkdir(shots, { recursive: true });
 
 const GB = 1024 ** 3;
+const NOW = Math.floor(Date.now() / 1000);
+const DAY = 86400;
 const T = (vi, en) => ({ vi, en });
+const app = (id, kind, name, publisher, dir, extra = {}) => ({
+  id, kind, name, publisher, version: extra.version ?? "1.0", install_dir: dir, installed: extra.installed ?? NOW - 100 * DAY,
+  last_used: extra.last_used ?? 0, usage_known: extra.usage_known ?? true, run_count: extra.run_count ?? 0, running: extra.running ?? false, bytes: extra.bytes ?? 0, files: 0, denied: 0,
+  measured: false, dead: extra.dead ?? false, folder_exists: extra.folder_exists ?? true, needs_admin: extra.needs_admin ?? false, msi: false,
+});
+const left = (p, area, extra = {}) => ({
+  id: `left:${p.toLowerCase()}`, path: p, area, note: T("Cài đặt và dữ liệu của app không còn cài.", "Settings and data of an app that is no longer installed."),
+  modified: extra.modified ?? NOW - 120 * DAY, has_exe: extra.has_exe ?? false, last_used: extra.last_used ?? 0, needs_admin: extra.needs_admin ?? false,
+});
 const cat = (id, group, label, note, p, safety, bytes, extra = {}) => ({
   id, group, label, note, path: p, paths: extra.paths || [p], safety, keep_root: extra.keep_root ?? true,
   needs_admin: extra.needs_admin ?? false, bytes, files: Math.round(bytes / 40000), denied: extra.denied ?? 0,
@@ -45,6 +56,30 @@ const FAKE = {
   ],
   settings: { language: null, extra_roots: ["E:\\Work"], excluded_roots: [], to_trash: false },
   roots: { discovered: ["C:\\", "D:\\", "C:\\Users\\Salyyy"], extra: ["E:\\Work"], excluded: [] },
+  apps: [
+    app("reg:hkcu:0:Blockbench", "desktop", "Blockbench", "JannisX11", "C:\\Users\\Salyyy\\AppData\\Local\\Programs\\Blockbench", { version: "4.12.4", last_used: NOW - 3 * DAY, run_count: 40 }),
+    app("reg:hkcu:0:NexoMaker", "desktop", "Nexo Maker", "Nexo", "C:\\Users\\Salyyy\\AppData\\Local\\Programs\\NexoMaker", { dead: true, folder_exists: false }),
+    app("reg:hklm:0:AutoTune", "desktop", "Auto-Tune Central 2.0.0", "Antares Audio Technologies", "C:\\Program Files\\Auto-Tune Central", { dead: true, folder_exists: false, needs_admin: true, bytes: 0.45 * GB }),
+    app("appx:Microsoft.Paint_11_x64__8wekyb3d8bbwe", "store", "Paint", "Microsoft Corporation", "C:\\Program Files\\WindowsApps\\Microsoft.Paint_11_x64__8wekyb3d8bbwe", { version: "11.2510.31.0", installed: 0, last_used: NOW - DAY, run_count: 12, running: true }),
+    app("reg:hklm:1:OldGame", "desktop", "Old Game Launcher", "Some Studio", "C:\\Program Files (x86)\\OldGame", { installed: NOW - 400 * DAY, bytes: 1.2 * GB }),
+    // MSI không ghi InstallLocation: không có thư mục để đối chiếu nhật ký → "không rõ", không tính là chưa từng mở.
+    app("reg:hklm:0:{686EA7E1-608A-4B99-A50A-448A2B2A7E73}", "desktop", "Node.js", "Node.js Foundation", null, { version: "24.1.0", usage_known: false, folder_exists: false, bytes: 0.09 * GB }),
+  ],
+  leftovers: [
+    left("C:\\Users\\Salyyy\\AppData\\Local\\Spotify", "appdata", { modified: NOW - 90 * DAY }),
+    left("C:\\ProgramData\\Privax", "programdata", { needs_admin: true }),
+    left("C:\\Program Files (x86)\\iLok License Manager", "programs", { has_exe: true, last_used: NOW - 20 * DAY, needs_admin: true }),
+    left("C:\\Users\\Salyyy\\AppData\\Local\\Packages\\windows_ie_ac_001", "packages", { modified: NOW - 300 * DAY }),
+  ],
+  sizes: {
+    "reg:hkcu:0:Blockbench": 0.4 * GB,
+    "appx:Microsoft.Paint_11_x64__8wekyb3d8bbwe": 0.02 * GB,
+    "reg:hklm:1:OldGame": 1.2 * GB,
+    "left:c:\\users\\salyyy\\appdata\\local\\spotify": 0.3 * GB,
+    "left:c:\\programdata\\privax": 0.01 * GB,
+    "left:c:\\program files (x86)\\ilok license manager": 0.05 * GB,
+    "left:c:\\users\\salyyy\\appdata\\local\\packages\\windows_ie_ac_001": 0,
+  },
 };
 
 const browser = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
@@ -82,6 +117,41 @@ await page.addInitScript((fake) => {
           case "scan_artifacts":
             for (const a of fake.artifacts) { await sleep(25); emit("artifact-found", a); }
             return fake.artifacts;
+          case "scan_apps": {
+            emit("apps-list", fake.apps);
+            for (const a of fake.apps) {
+              if (!a.folder_exists) continue;
+              const bytes = fake.sizes[a.id] ?? 0;
+              await sleep(10);
+              emit("app-size", { id: a.id, bytes: bytes / 2, files: 5, denied: 0, done: false });
+              await sleep(10);
+              emit("app-size", { id: a.id, bytes, files: 10, denied: a.kind === "store" ? 1 : 0, done: true });
+            }
+            return fake.apps.map((a) => ({ ...a, bytes: fake.sizes[a.id] ?? a.bytes, measured: a.folder_exists }));
+          }
+          case "scan_leftovers": {
+            emit("leftovers-list", fake.leftovers);
+            for (const l of fake.leftovers) {
+              const bytes = fake.sizes[l.id] ?? 0;
+              await sleep(10);
+              emit("leftover-size", { id: l.id, bytes: bytes / 2, files: 3, denied: 0, done: false });
+              await sleep(10);
+              emit("leftover-size", { id: l.id, bytes, files: 6, denied: 0, done: true });
+            }
+            return fake.leftovers;
+          }
+          case "uninstall_app": {
+            await sleep(60);
+            const a = fake.apps.find((x) => x.id === args.id);
+            if (!a) throw "missing";
+            return a.kind === "store" ? { gone: true, leftover_dir: null, freed: 0 } : { gone: true, leftover_dir: a.install_dir, freed: 0 };
+          }
+          case "remove_dead_app": {
+            const a = fake.apps.find((x) => x.id === args.id);
+            if (!a) throw "missing";
+            if (a.needs_admin) throw "needs-admin";
+            return { gone: true, leftover_dir: null, freed: args.deleteFolder && a.folder_exists ? 1234 : 0 };
+          }
           case "recycle_bin_info": return { items: 3, bytes: 120 * 1024 * 1024 };
           case "empty_recycle_bin": return { items: 3, bytes: 120 * 1024 * 1024 };
           case "cancel_scan": return null;
@@ -90,7 +160,7 @@ await page.addInitScript((fake) => {
             for (const it of args.items) {
               await sleep(30);
               const src = fake.catalog.find((c) => c.id === it.id) || fake.artifacts.find((a) => `art:${a.path}` === it.id);
-              const r = { id: it.id, freed: src ? src.bytes : 0, removed: 10, skipped: it.id === "user-temp" ? 2 : 0, error: it.id === "user-temp" ? "skipped" : null };
+              const r = { id: it.id, freed: src ? src.bytes : (fake.sizes[it.id] ?? 0), removed: 10, skipped: it.id === "user-temp" ? 2 : 0, error: it.id === "user-temp" ? "skipped" : null };
               emit("clean-progress", r);
               out.push(r);
             }
@@ -183,5 +253,83 @@ await page.waitForSelector("#confirm[open]");
 const quickTitle = await page.locator("#confirm-title").textContent();
 await page.click('#confirm button[value="cancel"]');
 
-console.log(JSON.stringify({ fonts, rowsCount, heroBytes, tallyAfterScan, measuringLeft, searchRows, groupCounts, enTexts, langSaved, chipCount, savedRoots, toastText, tallyRebuild, gainD, confirmTitle, doneText, nowText, goneRows, tallyAfterClean, quickTitle, overflow, errors }, null, 2));
+// Tab Ứng dụng: quét lười khi mở lần đầu, sắp "lâu không mở" (mục chết trước), huy hiệu đỏ.
+await page.click('[data-tab="apps"]');
+await page.waitForFunction(() => document.querySelectorAll(".app").length >= 5 && !document.querySelector(".app--measuring") && !document.querySelector("#apps-scanbar:not([hidden])"), null, { timeout: 15000 });
+const appsHero = await page.locator("#apps-hero").textContent();
+const appsSub = await page.locator("#apps-sub").textContent();
+const appsOrder = await page.evaluate(() => [...document.querySelectorAll(".app .app__name")].map((e) => e.textContent));
+const appsBadge = await page.locator("#badge-apps").textContent();
+const appsLastUsed = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll(".app")].map((r) => [r.querySelector(".app__name").textContent, r.querySelectorAll(".app__col b")[0].textContent])));
+await page.screenshot({ path: path.join(shots, "slclean-apps.png") });
+// Bộ lọc "chưa từng mở" không được gom app không rõ (không có thư mục cài).
+await page.click('[data-apps-filter="never"]');
+const neverRows = await page.evaluate(() => [...document.querySelectorAll(".app .app__name")].map((e) => e.textContent));
+
+// Bộ lọc "mục chết": 2 hàng, mục dưới HKLM bị khoá (cần admin).
+await page.click('[data-apps-filter="dead"]');
+const deadRows = await page.locator(".app").count();
+const deadLocked = await page.locator(".app .app__actions button[disabled]").count();
+// Xoá mục chết Nexo Maker qua hộp hỏi → hàng gạch bỏ, toast.
+await page.locator('.app[data-app="reg:hkcu:0:NexoMaker"] [data-act="dead"]').click();
+await page.waitForSelector("#ask[open]");
+const askDeadTitle = await page.locator("#ask-title").textContent();
+const askDeadOptionHidden = await page.locator("#ask-option").isHidden();
+await page.click("#ask-ok");
+await page.waitForFunction(() => document.querySelector('.app[data-app="reg:hkcu:0:NexoMaker"]')?.classList.contains("app--gone"), null, { timeout: 5000 });
+const toastDead = await page.locator("#toast").textContent();
+const appsBadgeAfter = await page.locator("#badge-apps").textContent();
+await page.click('[data-apps-filter="all"]');
+
+// Gỡ Blockbench: hộp hỏi → trình gỡ giả → hộp hỏi thư mục sót → xoá qua lệnh clean.
+await page.locator('.app[data-app="reg:hkcu:0:Blockbench"] [data-act="uninstall"]').click();
+await page.waitForSelector("#ask[open]");
+const askUninstallTitle = await page.locator("#ask-title").textContent();
+await page.click("#ask-ok");
+await page.waitForFunction(() => document.querySelector("#ask").open && /Blockbench/.test(document.querySelector("#ask-body").textContent), null, { timeout: 5000 });
+const askLeftoverTitle = await page.locator("#ask-title").textContent();
+const askLeftoverPath = await page.locator("#ask-path").textContent();
+await page.click("#ask-ok");
+await page.waitForFunction(() => document.querySelector("#toast").classList.contains("is-on") && /2\.86|Freed|Đã xoá thư mục sót|Leftover folder deleted/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+const toastLeftover = await page.locator("#toast").textContent();
+const blockbenchGone = await page.locator('.app[data-app="reg:hkcu:0:Blockbench"]').evaluate((el) => el.classList.contains("app--gone"));
+// App đang chạy (Paint) không gỡ được; tìm kiếm lọc theo tên.
+const paintUninstallDisabled = await page.locator('.app[data-app^="appx:"] [data-act="uninstall"]').isDisabled();
+await page.fill("#apps-search", "old game");
+await page.waitForTimeout(150);
+const appsSearchRows = await page.locator(".app").count();
+await page.fill("#apps-search", "");
+await page.waitForTimeout(150);
+
+// Tab Thư mục thừa: quét lười, nhãn vùng/exe/lần mở, mục cần admin bị khoá, tick + dọn qua nút ở rail.
+await page.click('[data-tab="leftovers"]');
+await page.waitForFunction(() => document.querySelectorAll("#left-list .row").length >= 4 && !document.querySelector("#left-list .row--measuring") && document.querySelector("#left-scanbar").hidden, null, { timeout: 15000 });
+const leftHero = await page.locator("#left-hero").textContent();
+const leftBadge = await page.locator("#badge-leftovers").textContent();
+const leftRows = await page.evaluate(() => [...document.querySelectorAll("#left-list .row")].map((r) => ({ label: r.querySelector(".row__label").textContent, tags: [...r.querySelectorAll(".tag")].map((t) => t.textContent), age: r.querySelector(".row__age")?.textContent, size: r.querySelector(".row__size").textContent, locked: r.querySelector("input").disabled })));
+await page.screenshot({ path: path.join(shots, "slclean-leftovers.png") });
+await page.locator("#left-list .row").filter({ hasText: "Spotify" }).locator(".row__label").click();
+const tallyLeftover = await page.locator("#tally-bytes").textContent();
+const cleanBadge = await page.locator("#badge-clean").textContent();
+await page.click("#btn-clean");
+await page.waitForSelector("#confirm[open]");
+const leftoverConfirmTitle = await page.locator("#confirm-title").textContent();
+await page.click("#confirm-ok");
+await page.waitForFunction(() => !document.querySelector("#progress-done").hidden, null, { timeout: 10000 });
+const leftoverDoneText = await page.locator("#progress-done").textContent();
+await page.click("#progress-close");
+const leftoverGoneRows = await page.locator("#left-list .row--gone").count();
+await page.click('[data-left-filter="packages"]');
+const leftPackagesRows = await page.locator("#left-list .row:not(.row--gone)").count();
+await page.click('[data-left-filter="all"]');
+// Quét lại cache không được xoá mất danh sách thư mục thừa.
+await page.click('[data-tab="clean"]');
+await page.click("#btn-scan");
+await scanned();
+const leftRowsAfterRescan = await page.evaluate(() => [...items.values()].filter((i) => i.group === "leftover").length);
+const tabStored = await page.evaluate(() => localStorage.getItem("slclean-tab"));
+
+console.log(JSON.stringify({ fonts, rowsCount, heroBytes, tallyAfterScan, measuringLeft, searchRows, groupCounts, enTexts, langSaved, chipCount, savedRoots, toastText, tallyRebuild, gainD, confirmTitle, doneText, nowText, goneRows, tallyAfterClean, quickTitle, overflow,
+  appsHero, appsSub, appsOrder, appsBadge, appsLastUsed, neverRows, deadRows, deadLocked, askDeadTitle, askDeadOptionHidden, toastDead, appsBadgeAfter, askUninstallTitle, askLeftoverTitle, askLeftoverPath, toastLeftover, blockbenchGone, paintUninstallDisabled, appsSearchRows,
+  leftHero, leftBadge, leftRows, tallyLeftover, cleanBadge, leftoverConfirmTitle, leftoverDoneText, leftoverGoneRows, leftPackagesRows, leftRowsAfterRescan, tabStored, errors }, null, 2));
 await browser.close();

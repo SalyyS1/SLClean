@@ -15,6 +15,7 @@ function setLanguage(next) {
   applyI18n();
   $("#btn-lang").textContent = lang === "vi" ? "EN" : "VI";
   renderAll();
+  renderApps();
   loadDrives();
   loadRecycle();
 }
@@ -105,7 +106,7 @@ function catalogItem(c, measuring) {
 async function scan() {
   if (scanning) return;
   scanning = true;
-  items.clear();
+  for (const [k, it] of items) if (it.group !== "leftover") items.delete(k);
   Object.assign(scanStats, { total: 0, done: 0, artifacts: 0 });
   renderAll();
   $("#empty-artifacts").hidden = false;
@@ -146,7 +147,7 @@ async function scan() {
   try {
     await Promise.all([loadDrives(), invoke("scan_catalog"), invoke("scan_artifacts")]);
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    $("#scan-status").textContent = t("rail.scanDone", { s: secs, n: items.size });
+    $("#scan-status").textContent = t("rail.scanDone", { s: secs, n: [...items.values()].filter((i) => i.group !== "leftover").length });
     if (scanStats.artifacts === 0) $("#empty-artifacts").textContent = t("artifacts.none");
   } catch (err) {
     $("#scan-status").textContent = t("rail.scanError", { e: err });
@@ -178,7 +179,8 @@ async function loadRecycle() {
 
 // ---------- Dọn ----------
 function selected() {
-  return [...items.values()].filter((i) => i.checked && !i.gone && i.bytes > 0);
+  // Thư mục thừa rỗng vẫn đáng xoá (tự thân thư mục là rác); mục cache rỗng thì không.
+  return [...items.values()].filter((i) => i.checked && !i.gone && (i.bytes > 0 || i.group === "leftover"));
 }
 
 function openConfirm() {
@@ -360,5 +362,7 @@ for (const gc of document.querySelectorAll("[data-group-check]")) {
     const s = await invoke("get_settings");
     $("#to-trash").checked = !!s.to_trash;
   } catch { /* mặc định xoá thẳng */ }
+  switchTab(activeTab);
+  if (activeTab !== "clean") tabShown.add("clean");
   scan();
 })();

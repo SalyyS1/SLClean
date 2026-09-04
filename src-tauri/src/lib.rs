@@ -2,6 +2,7 @@
 //! Thùng rác, cài đặt, chọn thư mục. Việc nặng chạy trên thread riêng; kết quả từng mục
 //! được phát qua event để UI cập nhật dần thay vì chờ toàn bộ.
 
+mod apps;
 mod artifacts;
 mod catalog;
 mod catalog_dynamic;
@@ -9,12 +10,18 @@ mod catalog_specs;
 mod cleaner;
 mod drives;
 mod elevation;
+mod installed_apps;
+mod leftovers;
 mod parallel;
 mod project_roots;
 mod recycle_bin;
+mod registry;
 mod settings;
+mod shortcuts;
 mod single_instance;
 mod sizer;
+mod store_apps;
+mod user_assist;
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -194,6 +201,92 @@ fn ui_language(app: AppHandle) -> String {
     settings::effective_language(&settings::load(&app))
 }
 
+/// Số liệu đo thư mục của một app / thư mục thừa, phát định kỳ và khi xong.
+#[derive(Clone, Serialize)]
+pub struct DirSize {
+    pub id: String,
+    pub bytes: u64,
+    pub files: u64,
+    pub denied: u64,
+    pub done: bool,
+}
+
+/// Đo dung lượng từng thư mục theo id, phát `event` với số tạm mỗi 250 ms và số cuối khi xong.
+/// Trả số cuối của từng id.
+fn measure_dirs(app: &AppHandle, cancel: &AtomicBool, event: &str, targets: Vec<(String, PathBuf)>) -> Vec<DirSize> {
+    parallel::map(targets, parallel::default_workers(), |(id, path)| {
+        let last = Mutex::new(Instant::now());
+        let st = sizer::dir_stats_with(&path, cancel, |partial| {
+            let mut t = last.lock().unwrap();
+            if t.elapsed() >= Duration::from_millis(250) {
+                *t = Instant::now();
+                let _ = app.emit(event, DirSize { id: id.clone(), bytes: partial.bytes, files: partial.files, denied: partial.denied, done: false });
+            }
+        });
+        let d = DirSize { id, bytes: st.bytes, files: st.files, denied: st.denied, done: true };
+        let _ = app.emit(event, &d);
+        d
+    })
+}
+
+/// Tab Ứng dụng: phát `apps-list` ngay (chỉ đọc registry, nhanh) rồi đo thư mục cài từng app,
+/// phát `app-size`. Trả danh sách đã gắn số đo cuối.
+#[tauri::command]
+async fn scan_apps(app: AppHandle, state: State<'_, ScanState>) -> Result<Vec<apps::AppInfo>, String> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let usage = apps::Usage::collect();
+        let mut list = apps::discover(&usage);
+        let _ = app.emit("apps-list", &list);
+        let targets: Vec<(String, PathBuf)> = list.iter().filter(|a| a.folder_exists).filter_map(|a| a.install_dir.clone().map(|p| (a.id.clone(), p))).collect();
+        for d in measure_dirs(&app, &cancel, "app-size", targets) {
+            if let Some(a) = list.iter_mut().find(|a| a.id == d.id) {
+                a.bytes = d.bytes;
+                a.files = d.files;
+                a.denied = d.denied;
+                a.measured = true;
+            }
+        }
+        list
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Gỡ một app qua trình gỡ của hãng hoặc Store, chờ xong, báo mục còn không và thư mục còn sót.
+#[tauri::command]
+async fn uninstall_app(id: String) -> Result<apps::ActionOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || apps::uninstall(&id)).await.map_err(|e| e.to_string())?
+}
+
+/// Xoá mục đăng ký chết (trình gỡ đã mất), tuỳ chọn xoá luôn thư mục còn sót.
+#[tauri::command]
+async fn remove_dead_app(id: String, delete_folder: bool) -> Result<apps::ActionOutcome, String> {
+    tauri::async_runtime::spawn_blocking(move || apps::remove_dead(&id, delete_folder)).await.map_err(|e| e.to_string())?
+}
+
+/// Tab Thư mục thừa: phát `leftovers-list` ngay rồi đo từng thư mục, phát `leftover-size`.
+#[tauri::command]
+async fn scan_leftovers(app: AppHandle, state: State<'_, ScanState>) -> Result<Vec<leftovers::Leftover>, String> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(roots) = catalog::Roots::detect() else { return Vec::new() };
+        let usage = apps::Usage::collect();
+        let desktop = installed_apps::list();
+        let store = store_apps::list();
+        let owners = leftovers::Owners::build(&desktop, &store, store_apps::installed_families(), &usage);
+        let list = leftovers::scan(&roots, &owners, &usage);
+        let _ = app.emit("leftovers-list", &list);
+        let targets = list.iter().map(|l| (l.id.clone(), l.path.clone())).collect();
+        measure_dirs(&app, &cancel, "leftover-size", targets);
+        list
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Hộp thoại chọn thư mục của hệ điều hành; None nếu người dùng huỷ.
 #[tauri::command]
 async fn pick_folder(app: AppHandle, title: String) -> Result<Option<PathBuf>, String> {
@@ -235,7 +328,11 @@ pub fn run() {
             get_settings,
             save_settings,
             ui_language,
-            pick_folder
+            pick_folder,
+            scan_apps,
+            uninstall_app,
+            remove_dead_app,
+            scan_leftovers
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

@@ -1,0 +1,59 @@
+/* Thanh tab trên cùng của vùng chính và các pane: mỗi tab là một pane có đầu bảng, thanh lọc và
+   danh sách cuộn riêng; chỉ pane đang chọn hiển thị. Thanh trái (rail) dùng chung cho mọi tab. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 28px 0;
+  background: var(--moss);
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--moss-2);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dust);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 140ms, background-color 140ms;
+}
+.tab svg { width: 14px; height: 14px; opacity: 0.8; }
+.tab:hover { color: var(--bone); background: var(--moss-3); }
+.tab.is-active { color: var(--moss); background: var(--amber); font-weight: 600; }
+.tab.is-active svg { opacity: 1; }
+.tab:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.tab__badge {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--moss);
+  color: var(--bone-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+.tab.is-active .tab__badge { background: rgba(16, 21, 18, 0.25); color: var(--moss); }
+.tab__badge--warn { background: var(--ember-tint); color: var(--ember); }
+.tab:not(.is-active) .tab__badge--warn { background: var(--ember-tint); color: var(--ember); }
+
+.pane {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 0;
+}

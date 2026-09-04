@@ -24,6 +24,7 @@
 
   --rail-w: 300px;
   --radius: 6px;
+  --radius-lg: 10px;
   --dur: 420ms;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }

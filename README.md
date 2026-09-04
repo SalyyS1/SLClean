@@ -1,18 +1,25 @@
 # SLClean
 
-Dọn cache, thư mục tạm và artifact build trên Windows. Desktop app (Tauri 2 + Rust), song ngữ
-Việt/Anh, không có bước nào tự xoá: bạn tick, bạn xác nhận, rồi nó mới xoá.
+Dọn cache, thư mục tạm và artifact build trên Windows; gỡ app lâu không mở, xoá mục app
+"chết" mà Settings không gỡ được, và dọn thư mục app đã gỡ để sót lại. Desktop app (Tauri 2 +
+Rust), song ngữ Việt/Anh, không có bước nào tự xoá: bạn tick, bạn xác nhận, rồi nó mới xoá.
 
 **Tải bản dùng ngay** ở trang [Releases](../../releases): `SLClean_<version>_x64-setup.exe`
 (bộ cài, cho user hiện tại, không đòi admin) hoặc `SLClean-portable.exe` (chạy không cần
 cài). File chưa ký số nên Windows SmartScreen hỏi lần đầu: chọn *More info → Run anyway*.
 
-*English:* clean caches, temp folders and build artifacts on Windows. Tauri 2 + Rust desktop
-app, Vietnamese/English UI, nothing is deleted until you tick it and confirm. Grab the
-installer or the portable exe from [Releases](../../releases); the binary is unsigned, so
-SmartScreen asks once.
+*English:* clean caches, temp folders and build artifacts on Windows; uninstall apps you
+never open, delete "dead" app entries that Settings can no longer remove, and clear folders
+left behind by uninstalled apps. Tauri 2 + Rust desktop app, Vietnamese/English UI, nothing
+is deleted until you tick it and confirm. Grab the installer or the portable exe from
+[Releases](../../releases); the binary is unsigned, so SmartScreen asks once.
 
 ![SLClean sau khi quét](scripts/shots/slclean-real-vi.png)
+
+Ba tab: **Dọn dẹp** (cache, thư mục tạm, artifact build), **Ứng dụng** (mọi app đã cài với
+lần mở cuối, gỡ hoặc xoá mục chết) và **Thư mục thừa** (thư mục không app nào nhận).
+
+![Tab Ứng dụng](scripts/shots/slclean-real-apps.png)
 
 ## Chạy từ mã nguồn
 
@@ -111,18 +118,58 @@ lưu ở `%APPDATA%\vn.salyyy.slclean\settings.json`.
 - Trong lúc quét, danh sách hiện ngay với nhãn `đang đo` và số tăng dần; con số lớn ở đầu
   bảng và thanh mảnh bên dưới cho biết tiến độ.
 
+## Tab Ứng dụng
+
+Liệt kê mọi app đã đăng ký với Windows: ba nhánh `Uninstall` trong registry (HKLM 64/32-bit,
+HKCU) và app Store của user hiện tại (`AppModel\Repository\Packages`, tên `ms-resource:` được
+dịch qua `SHLoadIndirectString`). Mỗi app có hãng, phiên bản, ngày cài, thư mục cài được đo
+thật (số của trình cài chỉ dùng khi không có thư mục), và **lần mở cuối** theo Windows ghi:
+
+- Nguồn là UserAssist trong HKCU (không cần admin): mỗi lần mở app qua Explorer/Start/Taskbar,
+  Windows ghi số lần và giờ lần cuối, tên bị mã ROT13 và tiền tố Program Files thay bằng GUID
+  thư mục chuẩn. Windows ghi nhiều app theo AppUserModelID hoặc shortcut `.lnk` chứ không theo
+  exe, nên app đọc thêm shortcut Start Menu/Taskbar/Desktop (định dạng MS-SHLLINK, không qua
+  COM) để nối ID ↔ exe ↔ thư mục cài. App mở từ dòng lệnh hoặc tự chạy cùng Windows có thể
+  không có bản ghi.
+- `chưa từng` = có thư mục cài mà không có bản ghi nào; `không rõ` = registry không ghi thư
+  mục cài (MSI hay bỏ trống `InstallLocation`) nên không đối chiếu được; app đang chạy được
+  nhận qua tiến trình.
+- **Gỡ** luôn chạy trình gỡ của chính hãng (nó tự xin UAC nếu cần) hoặc `Remove-AppxPackage`
+  với app Store; xong app kiểm tra lại registry và đề nghị xoá thư mục cài còn sót.
+- **Mục chết** là mục mà trình gỡ (exe) đã mất, thường do xoá tay thư mục app: Settings của
+  Windows không gỡ được nữa, nút `Xoá mục` xoá khoá registry đó (kèm thư mục sót nếu chọn).
+  Mục dưới HKLM cần chạy với quyền admin; MSI không bao giờ bị coi là chết vì `msiexec` gỡ
+  theo mã sản phẩm.
+
+## Tab Thư mục thừa
+
+Thư mục con trực tiếp của `AppData\Local`, `Roaming`, `LocalLow`, `ProgramData`, `Program
+Files (x86)`, `Local\Programs` và `Local\Packages` mà **không app đã cài nào nhận**: không
+app nào trỏ thư mục cài vào đó, tên thư mục không khớp tên/hãng app nào (đã chuẩn hoá, kể cả
+tên gói Store và exe đã chạy 6 tháng qua), không có tiến trình chạy từ đó. Thư mục Windows,
+tool dev và mọi thứ đã có mục riêng trong tab Dọn dẹp không bao giờ được nêu. Mỗi mục có
+nhãn vùng, `có exe` (app portable, xem kỹ) và lần mở cuối nếu Windows từng ghi; mục trong
+Program Files/ProgramData cần admin. Tick rồi dọn bằng nút ở thanh trái như mục cache, cả
+thư mục bị xoá (không giữ gốc). Đây là heuristic: luôn xem tên trước khi tick.
+
 ## Quyền admin
 
 Nút `Chạy với quyền admin` ở góc dưới trái mở lại app qua UAC rồi tự đóng bản hiện tại. Khi
 chưa elevated, các mục `cần admin` (dưới `%SystemRoot%`, `%ProgramData%`, `$WinREAgent`,
-`$WINDOWS.~BT`, `Windows.old`) bị khoá tick thay vì báo lỗi lúc dọn.
+`$WINDOWS.~BT`, `Windows.old`, thư mục thừa trong Program Files/ProgramData, mục chết dưới
+HKLM) bị khoá thay vì báo lỗi lúc dọn.
 
 ## Giới hạn đã biết
 
 - File đang mở bị bỏ qua và báo số lượng, không làm hỏng cả mục.
-- Đường dẫn được bảo vệ (gốc ổ đĩa, `%SystemRoot%`, Program Files, ProgramData, thư mục
-  home và các thư mục con chính, tool home như `.cargo`/`.gradle`/`.claude`, `.ssh`,
-  WindowsApps) bị từ chối ngay cả khi UI gửi lên.
+- Đường dẫn được bảo vệ (gốc ổ đĩa, `%SystemRoot%`, gốc Program Files và các thư mục
+  Windows/Microsoft/runtime bên trong, gốc ProgramData, thư mục home và các thư mục con
+  chính, tool home như `.cargo`/`.gradle`/`.claude`, `.ssh`, WindowsApps) bị từ chối ngay cả
+  khi UI gửi lên. Thư mục app của hãng thứ ba trong Program Files thì dọn được (thư mục thừa).
+- Lần mở cuối chỉ biết những gì Windows ghi vào UserAssist; app chạy từ terminal, từ
+  launcher khác, hoặc bằng tài khoản khác không có bản ghi. Tab Thư mục thừa là heuristic
+  theo tên: một thư mục của app portable đặt tên khác app có thể bị liệt kê, nên xem trước
+  khi tick.
 - Chỉ quét thư mục, chưa quét file đơn lẻ lớn (ví dụ `~\.codex\logs_*.sqlite` có thể lên
   tới 1 GB). Xem thủ công nếu ổ C vẫn đầy sau khi dọn.
 - Chưa có lịch dọn tự động và chưa có bản macOS/Linux (mã Rust có phần Windows-only:
@@ -146,14 +193,24 @@ src-tauri/src/
   cleaner.rs          xoá thẳng hoặc qua Thùng rác + danh sách đường dẫn bảo vệ
   settings.rs         settings.json (ngôn ngữ, thư mục thêm/loại trừ, chế độ Thùng rác)
   recycle_bin.rs      Thùng rác qua SHQueryRecycleBin/SHEmptyRecycleBin: một lời gọi, không liệt kê từng mục
+  registry.rs         đọc/xoá registry qua advapi32 (mở khoá, liệt kê, chuỗi/số/nhị phân, giờ ghi cuối, xoá nhánh)
+  installed_apps.rs   app desktop từ ba nhánh Uninstall; tách lệnh gỡ, ngày cài, mục "chết", chạy trình gỡ, xoá khoá
+  store_apps.rs       app Store của user (AppModel Repository), dịch tên ms-resource, Remove-AppxPackage
+  user_assist.rs      lần mở cuối từ UserAssist (ROT13, GUID thư mục chuẩn, bản ghi 72 byte), cả khoá exe lẫn .lnk
+  shortcuts.rs        đọc .lnk (MS-SHLLINK): đích + AppUserModelID; chỉ mục Start Menu/Taskbar/Desktop để nối ID ↔ exe
+  apps.rs             gộp desktop + Store thành AppInfo (lần mở, đang chạy, thư mục), gỡ app, xoá mục chết
+  leftovers.rs        thư mục không app nào nhận: chủ sở hữu (thư mục cài, từ khoá tên/hãng), danh sách không bao giờ nêu
   elevation.rs        kiểm tra elevated + mở lại qua UAC
   single_instance.rs  một bản chạy mỗi lần; --after-pid khi chuyển sang admin
   drives.rs           ổ đĩa cố định qua sysinfo
   parallel.rs         pool thread cố định dùng chung cho hai pha quét
 ui/
-  index.html                      bố cục (rail trái, hero, viewbar, sổ cái, 3 dialog)
+  index.html                      bố cục (rail trái, thanh tab, ba pane, hộp cài đặt/xác nhận/hỏi)
   js/i18n-strings.js              chuỗi vi/en, t(), L(), applyI18n()
-  js/ledger-view-and-rows.js      tạo hàng, hai cách xem, bộ lọc, tìm kiếm, tính tổng
+  js/ledger-view-and-rows.js      tạo hàng, hai cách xem, bộ lọc, tìm kiếm, tính tổng (cả mục thư mục thừa)
+  js/tabs-and-ask-dialog.js       chuyển tab (nhớ tab), huy hiệu, hộp hỏi chung ask(), lớp bận
+  js/apps-tab.js                  tab Ứng dụng: sắp/lọc/tìm, đo dần, gỡ, xoá mục chết (một hoặc tất cả)
+  js/leftovers-tab.js             tab Thư mục thừa: quét lười, lọc theo vùng, chọn hết
   js/settings-dialog.js           hộp cài đặt, chọn thư mục qua dialog hệ thống
   js/slclean-app.js                 quét, dọn, ổ đĩa, ngôn ngữ, sự kiện
   css/                            theo vùng giao diện; fonts.css sinh bởi scripts/fetch-google-fonts-offline.mjs
@@ -167,10 +224,15 @@ scripts/
   e2e-delete-fixture-in-real-app.mjs   xoá thật fixture qua hộp xác nhận của app
   measure-recycle-bin-command-in-real-app.mjs  đo lệnh Thùng rác trên app thật, kiểm tra cửa sổ còn trả lời
   e2e-trash-mode-roundtrip-in-real-app.mjs  dọn fixture có tick và không tick Thùng rác, đếm Thùng rác từ shell Windows
+  make-throwaway-app-fixtures.ps1      mục Uninstall giả (một chết, một gỡ được) + thư mục mồ côi trong %LOCALAPPDATA%; -Remove để dọn
+  e2e-apps-and-leftovers-in-real-app.mjs  xoá mục chết, gỡ app giả, dọn thư mục sót và thư mục mồ côi trên app thật; soi registry/đĩa sau mỗi bước
+  shoot-apps-and-leftovers-tabs-in-real-app.mjs  chụp hai tab mới trên app thật cho README
   make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
 ```
 
-Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (23 test: bảo vệ đường dẫn,
+Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (45 test: bảo vệ đường dẫn,
 xoá file bị khoá, mục nhiều thư mục, đo song song, phân loại artifact, loại trừ, dedupe
-danh mục, phân loại thư mục tạm, quyền admin, Thùng rác). Test UI: `node scripts/verify-ui-in-headless-chrome.mjs`
+danh mục, phân loại thư mục tạm, quyền admin, Thùng rác, registry, UserAssist, .lnk (đích, AUMID, thư mục làm việc), tách
+lệnh gỡ, ngày cài, app Store, chủ sở hữu thư mục; thêm 3 test `--ignored`: in danh sách app,
+thư mục thừa của máy hiện tại để soi bằng mắt, thêm một in mọi shortcut đọc được). Test UI: `node scripts/verify-ui-in-headless-chrome.mjs`
 (cần Chrome cài sẵn và `playwright-core` từ `npm install`).

@@ -24,23 +24,27 @@ pub struct CleanResult {
     pub error: Option<String>,
 }
 
+/// Thư mục con của Program Files thuộc Windows, Microsoft hoặc runtime dùng chung: không bao
+/// giờ xoá và không bao giờ coi là "thư mục thừa". App của hãng thứ ba nằm ngoài danh sách này.
+pub const PROGRAM_FILES_KEEP: &[&str] = &[
+    "common files", "internet explorer", "windows defender", "windows defender advanced threat protection", "windows mail",
+    "windows media player", "windows multimedia platform", "windows nt", "windows photo viewer", "windows portable devices",
+    "windows security", "windows sidebar", "windowsapps", "windowspowershell", "modifiablewindowsapps", "msbuild", "dotnet",
+    "reference assemblies", "microsoft", "microsoft sdks", "microsoft visual studio", "microsoft sql server", "microsoft.net",
+    "microsoft xna", "microsoft update health tools", "microsoft gameinput", "microsoft office", "uninstall information",
+    "installshield installation information", "application verifier", "windows kits", "package cache", "packagemanagement",
+    "intel", "nvidia corporation", "amd", "realtek", "hp", "dell", "lenovo", "asus", "google", "mozilla maintenance service",
+    "bonjour", "java", "eclipse adoptium", "common", "rempl", "wsl", "git", "nodejs", "python", "go", "rust",
+];
+
 fn lower(p: &Path) -> String {
     p.to_string_lossy().to_ascii_lowercase().trim_end_matches('\\').to_string()
 }
 
-/// Đường dẫn không bao giờ được xoá dù UI gửi gì: gốc ổ đĩa và một cấp dưới gốc, thư mục
-/// Windows/Program Files/ProgramData, thư mục home và các thư mục con chuẩn, tool home
-/// (.cargo, .gradle, .claude…), app đã cài (Local\Programs, WindowsApps). Tất cả suy từ biến
-/// môi trường, không ghi cứng theo máy.
-fn is_protected(path: &Path) -> bool {
-    if !path.is_absolute() {
-        return true;
-    }
-    // Trên Windows `C:\Windows` có 3 component: tiền tố `C:`, gốc `\`, tên.
-    if path.components().count() <= 3 {
-        return true;
-    }
-    let target = lower(path);
+/// Hai danh sách đường dẫn (chữ thường) suy từ biến môi trường: `exact` là các gốc chỉ được
+/// bảo vệ đúng chính nó (Program Files, ProgramData, home, AppData\Local…); `prefix` là các cây
+/// bị bảo vệ toàn bộ (System32, .ssh, thư mục Windows/runtime trong Program Files…).
+fn guard_lists() -> (Vec<String>, Vec<String>) {
     let env = |k: &str| std::env::var_os(k).map(|v| lower(Path::new(&v)));
     let mut exact: Vec<String> = Vec::new();
     let mut prefix: Vec<String> = Vec::new();
@@ -50,9 +54,14 @@ fn is_protected(path: &Path) -> bool {
             prefix.push(format!("{sr}\\{s}"));
         }
     }
+    // Program Files: gốc và các thư mục Windows/runtime dùng chung được bảo vệ; thư mục app của
+    // hãng thứ ba thì không, để dọn được thư mục cài còn sót sau khi gỡ (tab Thư mục thừa).
     for k in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
         if let Some(p) = env(k) {
-            prefix.push(p);
+            exact.push(p.clone());
+            for s in PROGRAM_FILES_KEEP {
+                prefix.push(format!("{p}\\{s}"));
+            }
         }
     }
     if let Some(pd) = env("ProgramData") {
@@ -72,7 +81,40 @@ fn is_protected(path: &Path) -> bool {
             prefix.push(format!("{h}\\{sub}"));
         }
     }
-    exact.iter().any(|p| *p == target) || prefix.iter().any(|p| target == *p || target.starts_with(&format!("{p}\\")))
+    (exact, prefix)
+}
+
+/// Đường dẫn không bao giờ được xoá dù UI gửi gì: gốc ổ đĩa và một cấp dưới gốc, thư mục
+/// Windows/Program Files/ProgramData, thư mục home và các thư mục con chuẩn, tool home
+/// (.cargo, .gradle, .claude…), app đã cài (Local\Programs, WindowsApps). Tất cả suy từ biến
+/// môi trường, không ghi cứng theo máy.
+pub(crate) fn is_protected(path: &Path) -> bool {
+    if is_root_like(path) {
+        return true;
+    }
+    let target = lower(path);
+    let (_, prefix) = guard_lists();
+    prefix.iter().any(|p| target == *p || target.starts_with(&format!("{p}\\")))
+}
+
+/// Đường dẫn là một "gốc" chứ không thể là thư mục cài của app nào: gốc ổ đĩa, một cấp dưới gốc
+/// (C:\Windows, C:\Program Files), các gốc trong `exact`, và mọi thứ dưới %SystemRoot%. Khác
+/// `is_protected` ở chỗ thư mục runtime trong Program Files (nodejs, Git, Java…) vẫn là thư mục
+/// cài hợp lệ để đo và đối chiếu, dù không bao giờ được xoá.
+pub(crate) fn is_root_like(path: &Path) -> bool {
+    if !path.is_absolute() {
+        return true;
+    }
+    // Trên Windows `C:\Windows` có 3 component: tiền tố `C:`, gốc `\`, tên.
+    if path.components().count() <= 3 {
+        return true;
+    }
+    let target = lower(path);
+    let (exact, _) = guard_lists();
+    if exact.iter().any(|p| *p == target) {
+        return true;
+    }
+    std::env::var_os("SystemRoot").map(|v| lower(Path::new(&v))).map(|sr| target.starts_with(&format!("{sr}\\"))).unwrap_or(false)
 }
 
 fn clear_readonly(path: &Path) {
@@ -265,8 +307,17 @@ mod tests {
     fn protected_paths_are_refused() {
         let sr = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
         let pf = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into());
-        for p in [r"C:\".to_string(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\System32\\drivers"), pf.clone(), format!("{pf}\\Google"), "relative\\path".into()] {
+        for p in [r"C:\".to_string(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\System32\\drivers"), pf.clone(), format!("{pf}\\Google"), format!("{pf}\\Common Files\\x"), "relative\\path".into()] {
             assert!(is_protected(Path::new(&p)), "{p}");
+        }
+        // Thư mục app hãng thứ ba trong Program Files phải dọn được (thư mục thừa sau khi gỡ).
+        assert!(!is_protected(Path::new(&format!("{pf}\\Some Vendor App"))));
+        // Thư mục runtime trong Program Files không xoá được nhưng vẫn là thư mục cài để đo.
+        assert!(is_protected(Path::new(&format!("{pf}\\nodejs"))));
+        assert!(!is_root_like(Path::new(&format!("{pf}\\nodejs"))));
+        assert!(!is_root_like(Path::new(&format!("{pf}\\Git"))));
+        for p in [pf.clone(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\Installer\\x"), r"C:\".to_string()] {
+            assert!(is_root_like(Path::new(&p)), "{p}");
         }
         let home = dirs::home_dir().unwrap();
         assert!(is_protected(&home));

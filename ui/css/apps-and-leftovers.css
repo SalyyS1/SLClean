@@ -1,0 +1,90 @@
+/* Tab Ứng dụng: mỗi app một hàng có "avatar" chữ cái, tên + hãng, lần mở cuối, ngày cài, dung
+   lượng và nút hành động. Tab Thư mục thừa dùng lại hàng của sổ cái (.row) với vài nhãn thêm. */
+.apps { list-style: none; margin: 0; padding: 0; }
+
+.app {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto auto;
+  align-items: center;
+  column-gap: 14px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color 120ms;
+  animation: row-in var(--dur) var(--ease) both;
+}
+.app:hover { background: var(--moss-2); }
+.app--dead { background: rgba(217, 90, 67, 0.04); }
+.app--gone { opacity: 0.35; text-decoration: line-through; pointer-events: none; }
+
+/* Chữ cái đầu trên nền màu suy từ tên: đủ để mắt phân biệt các hàng mà không cần icon thật. */
+.app__avatar {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--moss);
+  background: var(--av, var(--sage));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.app--dead .app__avatar { background: var(--moss-3); color: var(--dust-dim); box-shadow: inset 0 0 0 1px var(--line); }
+
+.app__main { min-width: 0; display: grid; gap: 2px; }
+.app__title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.app__name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app__meta { font-size: 12px; color: var(--dust); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app__meta .ver { font-family: var(--font-mono); color: var(--dust-dim); }
+.app__path {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--dust-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  direction: rtl; text-align: left;
+}
+.app__path bdi { direction: ltr; unicode-bidi: isolate; }
+
+.app__col { display: grid; gap: 1px; text-align: right; white-space: nowrap; }
+.app__col small { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dust-dim); }
+.app__col b { font-weight: 500; font-size: 12.5px; color: var(--bone-dim); }
+.app__col--stale b { color: var(--amber); }
+.app__col--never b { color: var(--ember); }
+.app__col--unknown b { color: var(--dust-dim); font-weight: 400; }
+.app__col--fresh b { color: var(--sage); }
+
+.app__size {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 8ch;
+  color: var(--bone-dim);
+}
+.app__size--estimate { color: var(--dust); }
+.app--measuring .app__size { color: var(--dust); animation: measuring-pulse 1.4s ease-in-out infinite; }
+
+.app__actions { display: inline-flex; align-items: center; gap: 4px; }
+.app__actions .btn--sm { padding: 5px 11px; font-size: 12px; }
+.app__actions .row__open { opacity: 0; }
+.app:hover .app__actions .row__open, .app__actions .row__open:focus-visible { opacity: 1; }
+
+.tag--dead { background: var(--ember-tint); color: var(--ember); }
+.tag--store { background: var(--moss-3); color: var(--dust); }
+.tag--running { background: var(--sage-tint); color: var(--sage); }
+.tag--area { background: var(--moss-3); color: var(--dust); }
+.tag--exe { background: var(--amber-tint); color: var(--amber); }
+
+/* Nút hành động chính: gỡ = viền, xoá mục chết = đỏ than nhạt. */
+.btn--danger-soft { background: var(--ember-tint); color: var(--ember); border-color: transparent; }
+.btn--danger-soft:not(:disabled):hover { background: var(--ember); color: #1a0d0a; }
+
+/* Tiến trình không xác định (đang chờ trình gỡ của hãng). */
+.progress--busy .progress__fill { width: 38%; animation: busy-slide 1.3s ease-in-out infinite; }
+@keyframes busy-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(270%); } }
+
+/* Hộp hỏi: đường dẫn và tuỳ chọn. */
+.ask__path { font-size: 12px; color: var(--dust); word-break: break-all; }
+.ask .mode { font-size: 13px; }
+
+/* Hàng thư mục thừa: cột "lần mở" tận dụng chỗ của tuổi. */
+.row__age--used { color: var(--amber); }

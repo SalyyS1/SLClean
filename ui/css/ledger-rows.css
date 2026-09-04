@@ -33,7 +33,7 @@
   animation: row-in var(--dur) var(--ease) both;
 }
 .row:hover { background: var(--moss-2); }
-.row--checked { background: rgba(226, 168, 59, 0.04); }
+.row--checked { background: linear-gradient(90deg, rgba(226, 168, 59, 0.07), rgba(226, 168, 59, 0.02)); }
 .row--zero { opacity: 0.45; }
 .row--gone { opacity: 0.35; text-decoration: line-through; pointer-events: none; }
 

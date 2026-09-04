@@ -9,6 +9,8 @@ const GROUPS = ["artifacts", "ai", "package", "editor", "browser", "app", "game"
 /** id → { id, group, label, note, path, paths, bytes, safety, keepRoot, needsAdmin, checked, gone, partial, age, measuring } */
 const items = new Map();
 let scanning = false;
+/** Tab Thư mục thừa đang quét (mục group "leftover" nằm chung trong `items`). */
+let leftScanning = false;
 /** App có đang chạy với quyền admin không; set một lần lúc khởi động. */
 let elevated = false;
 
@@ -27,6 +29,8 @@ function matchesQuery(it) {
 /** Mục có qua được bộ lọc hiện tại không (mục đã tick luôn hiện để không "mất dấu" lựa chọn). */
 function passesFilter(it) {
   if (it.checked) return true;
+  // Thư mục thừa có bộ lọc/tìm kiếm riêng của tab nó; mục rỗng vẫn hiện vì tự thân thư mục là rác.
+  if (it.group === "leftover") return leftoverPasses(it);
   // Mục rỗng không dọn được gì: ẩn cho gọn, trừ khi rỗng vì không đọc được (admin có thể thấy thêm).
   if (it.bytes === 0 && !it.measuring && !it.partial) return false;
   if (!matchesQuery(it)) return false;
@@ -40,12 +44,13 @@ function lockedByAdmin(it) {
   return it.needsAdmin && !elevated;
 }
 
-/** Không tick được: đang đo, rỗng, khoá admin. */
+/** Không tick được: đang đo, rỗng (trừ thư mục thừa), khoá admin. */
 function unselectable(it) {
-  return it.measuring || it.bytes === 0 || lockedByAdmin(it);
+  return it.measuring || (it.bytes === 0 && it.group !== "leftover") || lockedByAdmin(it);
 }
 
 function containerFor(it) {
+  if (it.group === "leftover") return $("#left-list");
   return view === "size" ? $("#rows-flat") : $(`#rows-${it.group}`);
 }
 
@@ -68,12 +73,18 @@ function rowFor(it) {
   const partial = it.partial ? `<b class="tag tag--partial" title="${esc(t("tag.partialTitle"))}">${t("tag.partial")}</b>` : "";
   const measuring = it.measuring ? `<b class="tag tag--measuring">${t("tag.measuring")}</b>` : "";
   const multi = it.paths.length > 1 ? `<span class="row__multi">· ${t("row.paths", { n: it.paths.length })}</span>` : "";
-  const age = it.age != null ? `<span class="row__age ${isStale(it.age) ? "row__age--stale" : ""}">${fmtAge(it.age)}</span>` : "<span></span>";
+  const extra = (it.extraTags || []).join("");
+  // Thư mục thừa: cột tuổi hiện lần mở cuối nếu Windows từng thấy exe trong đó chạy, không thì lần ghi cuối.
+  const age = it.group === "leftover"
+    ? (it.lastUsed
+      ? `<span class="row__age row__age--used" title="${esc(t("left.lastUsedTitle"))}">${t("left.lastUsed", { a: fmtAge(it.lastUsed) })}</span>`
+      : `<span class="row__age ${isStale(it.age) ? "row__age--stale" : ""}" title="${esc(t("left.modifiedTitle"))}">${fmtAge(it.age) || ""}</span>`)
+    : it.age != null ? `<span class="row__age ${isStale(it.age) ? "row__age--stale" : ""}">${fmtAge(it.age)}</span>` : "<span></span>";
   const note = L(it.note);
   li.innerHTML = `
     <label class="check"><input type="checkbox" ${it.checked ? "checked" : ""} ${unselectable(it) ? "disabled" : ""}><span class="check__box"></span></label>
     <div class="row__main">
-      <div class="row__title"><span class="row__label">${esc(L(it.label))}</span>${tag}${admin}${partial}${measuring}</div>
+      <div class="row__title"><span class="row__label">${esc(L(it.label))}</span>${tag}${extra}${admin}${partial}${measuring}</div>
       <div class="row__path" title="${esc(it.paths.join("\n"))}"><bdi>${esc(shortPath(it.path))}</bdi>${multi}</div>
       ${note ? `<div class="row__note">${esc(note)}</div>` : ""}
       <div class="row__bar"></div>
@@ -82,7 +93,7 @@ function rowFor(it) {
     <span class="row__size">${sizeText(it)}</span>
     <button class="row__open" title="${esc(t("row.open"))}" aria-label="${esc(t("row.open"))}">${REVEAL_SVG}</button>`;
   li.classList.toggle("row--checked", it.checked);
-  li.classList.toggle("row--zero", it.bytes === 0 && !it.measuring);
+  li.classList.toggle("row--zero", it.bytes === 0 && !it.measuring && it.group !== "leftover");
   li.classList.toggle("row--measuring", !!it.measuring);
   li.classList.toggle("row--gone", !!it.gone);
   const input = li.querySelector("input");
@@ -133,12 +144,13 @@ function renderAll() {
   for (const sec of document.querySelectorAll(".group[data-group]")) sec.hidden = view === "size";
   $("#rows-flat").innerHTML = "";
   for (const g of GROUPS) $(`#rows-${g}`).innerHTML = "";
+  $("#left-list").innerHTML = "";
   const sorted = [...items.values()].sort((a, b) => b.bytes - a.bytes);
   let shown = 0;
   for (const it of sorted) {
     if (!passesFilter(it)) continue;
     containerFor(it).appendChild(rowFor(it));
-    shown++;
+    if (it.group !== "leftover") shown++;
   }
   $("#empty-flat").hidden = view !== "size" || shown > 0 || scanning;
   refreshTotals();
@@ -165,11 +177,22 @@ function refreshTotals() {
     gc.disabled = selectable === 0;
     if (g !== "flat") $(`[data-group="${g}"]`).classList.toggle("group--empty", rows.length === 0 && g !== "artifacts");
   }
+  // Thanh cỡ tương đối của danh sách thư mục thừa (tab riêng, không thuộc GROUPS).
+  {
+    const list = $("#left-list");
+    const rows = [...list.children].map((li) => items.get(li.dataset.id)).filter((i) => i && !i.gone);
+    const max = Math.max(0, ...rows.map((i) => i.bytes));
+    for (const li of list.children) {
+      const it = items.get(li.dataset.id);
+      li.querySelector(".row__bar").style.setProperty("--rel", max ? `${((it.bytes / max) * 100).toFixed(1)}%` : "0%");
+    }
+  }
   let checkedBytes = 0, checkedCount = 0, foundBytes = 0, hiddenBytes = 0, hiddenCount = 0, zeroHidden = 0;
   for (const it of items.values()) {
     if (it.gone) continue;
-    foundBytes += it.bytes;
     if (it.checked) { checkedBytes += it.bytes; checkedCount++; }
+    if (it.group === "leftover") continue;
+    foundBytes += it.bytes;
     if (!passesFilter(it) && it.bytes > 0) { hiddenBytes += it.bytes; hiddenCount++; }
     if (it.bytes === 0 && !it.measuring && !it.partial) zeroHidden++;
   }
@@ -181,8 +204,10 @@ function refreshTotals() {
   if (hiddenCount) hints.push(t("filter.hint", { n: hiddenCount, b: fmtBytes(hiddenBytes) }));
   if (zeroHidden) hints.push(t("filter.zero", { n: zeroHidden }));
   $("#filter-hint").textContent = hints.join(" · ");
-  $("#btn-clean").disabled = checkedCount === 0 || scanning;
+  $("#btn-clean").disabled = checkedCount === 0 || scanning || leftScanning;
+  setTabBadge("clean", checkedCount, false);
   paintGains();
+  refreshLeftTotals();
 }
 
 /** Đồng bộ ô tick của mọi hàng đang hiển thị với trạng thái trong `items`. */
