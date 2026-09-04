@@ -39,7 +39,9 @@ admin. Nếu ổ chứa dự án chật, trỏ thư mục build sang ổ khác t
 set CARGO_TARGET_DIR=C:\tmp\slclean-release-out
 ```
 
-khi đó kết quả nằm ở `C:\tmp\slclean-release-out\release\...`.
+khi đó kết quả nằm ở `C:\tmp\slclean-release-out\release\...`. Để phát hành,
+`powershell -File scripts\make-release-bundles.ps1` làm trọn bước này rồi gom bộ cài, exe
+portable và `SHA256SUMS.txt` vào `release\`; đính ba file đó lên GitHub Release.
 
 ## Cách phân loại
 
@@ -143,6 +145,7 @@ src-tauri/src/
   sizer.rs            đo dung lượng bằng read_dir (không stat thêm từng file), báo tiến trình
   cleaner.rs          xoá thẳng hoặc qua Thùng rác + danh sách đường dẫn bảo vệ
   settings.rs         settings.json (ngôn ngữ, thư mục thêm/loại trừ, chế độ Thùng rác)
+  recycle_bin.rs      Thùng rác qua SHQueryRecycleBin/SHEmptyRecycleBin: một lời gọi, không liệt kê từng mục
   elevation.rs        kiểm tra elevated + mở lại qua UAC
   single_instance.rs  một bản chạy mỗi lần; --after-pid khi chuyển sang admin
   drives.rs           ổ đĩa cố định qua sysinfo
@@ -162,9 +165,11 @@ scripts/
   probe-real-app-settings-commands.mjs kiểm tra roundtrip settings trên app thật
   make-throwaway-artifact-fixture.ps1  dự án giả 3 MB trong D:\tmp
   e2e-delete-fixture-in-real-app.mjs   xoá thật fixture qua hộp xác nhận của app
+  measure-recycle-bin-command-in-real-app.mjs  đo lệnh Thùng rác trên app thật, kiểm tra cửa sổ còn trả lời
+  make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
 ```
 
-Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (21 test: bảo vệ đường dẫn,
+Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (23 test: bảo vệ đường dẫn,
 xoá file bị khoá, mục nhiều thư mục, đo song song, phân loại artifact, loại trừ, dedupe
-danh mục, phân loại thư mục tạm, quyền admin). Test UI: `node scripts/verify-ui-in-headless-chrome.mjs`
+danh mục, phân loại thư mục tạm, quyền admin, Thùng rác). Test UI: `node scripts/verify-ui-in-headless-chrome.mjs`
 (cần Chrome cài sẵn và `playwright-core` từ `npm install`).

@@ -11,6 +11,7 @@ mod drives;
 mod elevation;
 mod parallel;
 mod project_roots;
+mod recycle_bin;
 mod settings;
 mod single_instance;
 mod sizer;
@@ -42,12 +43,6 @@ pub struct CatalogProgress {
     pub id: String,
     pub bytes: u64,
     pub files: u64,
-}
-
-#[derive(Clone, Serialize)]
-pub struct RecycleBin {
-    pub items: usize,
-    pub bytes: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -164,26 +159,23 @@ async fn relaunch_as_admin(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Số mục và dung lượng Thùng rác. Chạy ngoài main thread để cửa sổ không bao giờ treo,
+/// dù shell có chậm.
 #[tauri::command]
-fn recycle_bin_info() -> RecycleBin {
-    let items = trash::os_limited::list().unwrap_or_default();
-    let bytes = items
-        .iter()
-        .filter_map(|i| trash::os_limited::metadata(i).ok())
-        .map(|m| match m.size {
-            trash::TrashItemSize::Bytes(b) => b,
-            trash::TrashItemSize::Entries(_) => 0,
-        })
-        .sum();
-    RecycleBin { items: items.len(), bytes }
+async fn recycle_bin_info() -> Result<recycle_bin::RecycleBin, String> {
+    tauri::async_runtime::spawn_blocking(recycle_bin::query).await.map_err(|e| e.to_string())?
 }
 
+/// Dọn sạch Thùng rác; trả số liệu trước khi dọn để UI báo đã giải phóng bao nhiêu.
 #[tauri::command]
-fn empty_recycle_bin() -> Result<RecycleBin, String> {
-    let before = recycle_bin_info();
-    let items = trash::os_limited::list().map_err(|e| e.to_string())?;
-    trash::os_limited::purge_all(items).map_err(|e| e.to_string())?;
-    Ok(before)
+async fn empty_recycle_bin() -> Result<recycle_bin::RecycleBin, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let before = recycle_bin::query()?;
+        recycle_bin::empty()?;
+        Ok(before)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
