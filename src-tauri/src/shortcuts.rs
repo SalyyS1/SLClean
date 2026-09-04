@@ -265,6 +265,13 @@ impl ShortcutIndex {
         None
     }
 
+    /// Có shortcut nào (Start Menu, Taskbar, Desktop) mở một exe nằm trong `dir` không: dấu
+    /// hiệu Windows có cho người dùng một lối mở app này, tức nó không phải thành phần chạy nền.
+    pub fn points_into(&self, dir: &Path) -> bool {
+        let prefix = format!("{}\\", dir.to_string_lossy().to_ascii_lowercase().replace('/', "\\").trim_end_matches('\\'));
+        self.by_lnk.values().any(|t| t.to_string_lossy().to_ascii_lowercase().starts_with(&prefix))
+    }
+
     /// Thư mục chứa exe của shortcut có tên trùng tên app (đã chuẩn hoá).
     pub fn dir_for_name(&self, name: &str) -> Option<PathBuf> {
         let n = crate::leftovers::norm(name);
@@ -383,6 +390,10 @@ mod tests {
         assert_eq!(idx.resolve(r"C:\Apps\Bar\bar.exe"), None, "exe paths are already resolved");
         assert_eq!(idx.dir_for_name("Foo"), Some(PathBuf::from(r"C:\Apps\Foo")));
         assert_eq!(idx.dir_for_name("Bar"), None);
+        assert!(idx.points_into(Path::new(r"C:\Apps\Foo")));
+        assert!(idx.points_into(Path::new(r"c:\apps\foo\")), "case and trailing slash must not matter");
+        assert!(!idx.points_into(Path::new(r"C:\Apps\Foobar")), "prefix must stop at a folder boundary");
+        assert!(!idx.points_into(Path::new(r"C:\Apps\Bar")));
     }
 
     /// Start Menu của mọi máy Windows có shortcut trỏ tới exe (ví dụ Windows Media Player Legacy).

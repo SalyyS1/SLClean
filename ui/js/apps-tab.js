@@ -23,12 +23,18 @@ function appMatches(a) {
   return [a.name, a.publisher, a.install_dir || ""].some((s) => String(s).toLowerCase().includes(appsQuery));
 }
 
+/** App bình thường mà người dùng có thể cân nhắc gỡ (không phải mục chết, không phải thành phần nền). */
+function isUninstallCandidate(a) {
+  return !a.dead && !a.system_component;
+}
+
 function appPasses(a) {
   if (a.gone) return false;
   if (!appMatches(a)) return false;
   switch (appsFilter) {
     case "dead": return a.dead;
-    case "never": return !a.dead && a.usage_known && a.last_used === 0 && !a.running;
+    case "never": return isUninstallCandidate(a) && a.usage_known && a.last_used === 0 && !a.running;
+    case "component": return a.system_component;
     case "desktop": return a.kind === "desktop";
     case "store": return a.kind === "store";
     default: return true;
@@ -42,8 +48,9 @@ function appCompare(x, y) {
     case "name": return x.name.localeCompare(y.name, undefined, { sensitivity: "base" });
     default: {
       // Lâu không mở: mục chết trước, rồi chưa từng mở, rồi không rõ (không có thư mục để đối
-      // chiếu), rồi lần mở cũ nhất; đang chạy cuối. Cùng hạng thì lớn trước.
-      const rank = (a) => (a.dead ? 0 : a.running ? 4 : !a.usage_known ? 2 : a.last_used === 0 ? 1 : 3);
+      // chiếu), rồi lần mở cũ nhất, rồi đang chạy; thành phần nền xuống cuối vì không phải ứng
+      // viên để gỡ. Cùng hạng thì lớn trước.
+      const rank = (a) => (a.dead ? 0 : a.system_component ? 5 : a.running ? 4 : !a.usage_known ? 2 : a.last_used === 0 ? 1 : 3);
       return rank(x) - rank(y) || (x.last_used - y.last_used) || (y.bytes - x.bytes);
     }
   }
@@ -51,6 +58,8 @@ function appCompare(x, y) {
 
 function lastUsedCol(a) {
   if (a.running) return `<span class="app__col app__col--fresh"><small>${t("apps.lastUsedLabel")}</small><b>${t("apps.running")}</b></span>`;
+  // Thành phần nền không có gì để "mở", nên "chưa từng" ở đây là vô nghĩa.
+  if (a.system_component && !a.last_used) return `<span class="app__col app__col--unknown"><small>${t("apps.lastUsedLabel")}</small><b>—</b></span>`;
   if (!a.usage_known) return `<span class="app__col app__col--unknown" title="${esc(t("apps.unknownTitle"))}"><small>${t("apps.lastUsedLabel")}</small><b>${t("apps.unknown")}</b></span>`;
   if (!a.last_used) return `<span class="app__col app__col--never"><small>${t("apps.lastUsedLabel")}</small><b>${t("apps.never")}</b></span>`;
   const stale = isStale(a.last_used);
@@ -76,6 +85,7 @@ function appRow(a) {
   li.style.setProperty("--av", avatarColor(a.name));
   const tags = [];
   if (a.dead) tags.push(`<b class="tag tag--dead" title="${esc(t("apps.deadTitle"))}">${t("apps.dead")}</b>`);
+  if (a.system_component) tags.push(`<b class="tag tag--component" title="${esc(t("apps.componentTitle"))}">${t("apps.component")}</b>`);
   if (a.kind === "store") tags.push(`<b class="tag tag--store">Store</b>`);
   if (a.running) tags.push(`<b class="tag tag--running">${t("apps.running")}</b>`);
   if (a.denied > 0) tags.push(`<b class="tag tag--partial" title="${esc(t("tag.partialTitle"))}">${t("tag.partial")}</b>`);
@@ -126,16 +136,20 @@ function renderApps() {
 }
 
 function refreshAppsTotals() {
-  let bytes = 0, dead = 0, never = 0, deadRemovable = 0, live = 0;
+  let bytes = 0, dead = 0, never = 0, deadRemovable = 0, live = 0, components = 0;
   for (const a of apps.values()) {
     if (a.gone) continue;
     live++;
     bytes += a.folder_exists ? a.bytes : 0;
     if (a.dead) { dead++; if (!a.needs_admin) deadRemovable++; }
+    else if (a.system_component) components++;
     else if (a.usage_known && a.last_used === 0 && !a.running) never++;
   }
   $("#apps-hero").textContent = apps.size ? fmtBytes(bytes) : "—";
-  if (!appsScanning) $("#apps-sub").textContent = apps.size ? t("apps.summary", { n: live, dead, never }) : t("apps.subIdle");
+  if (!appsScanning) {
+    const sum = t("apps.summary", { n: live, dead, never });
+    $("#apps-sub").textContent = apps.size ? (components ? `${sum} · ${t("apps.summaryComponents", { n: components })}` : sum) : t("apps.subIdle");
+  }
   const hidden = [...apps.values()].filter((a) => !a.gone && !appPasses(a)).length;
   $("#apps-hint").textContent = hidden ? t("apps.hiddenHint", { n: hidden }) : "";
   const bulk = $("#btn-remove-dead");

@@ -68,6 +68,7 @@
 .app__actions .row__open { opacity: 0; }
 .app:hover .app__actions .row__open, .app__actions .row__open:focus-visible { opacity: 1; }
 
+.tag--component { background: var(--moss-3); color: var(--dust); }
 .tag--dead { background: var(--ember-tint); color: var(--ember); }
 .tag--store { background: var(--moss-3); color: var(--dust); }
 .tag--running { background: var(--sage-tint); color: var(--sage); }

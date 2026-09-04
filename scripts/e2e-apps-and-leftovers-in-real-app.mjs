@@ -48,10 +48,11 @@ out.apps = await page.evaluate(() => {
   const stale = all.filter((a) => !a.dead && a.last_used > 0).sort((a, b) => a.last_used - b.last_used).slice(0, 5).map((a) => `${a.name} ${fmtAge(a.last_used)}`);
   return {
     total: all.length, desktop: all.filter((a) => a.kind === "desktop").length, store: all.filter((a) => a.kind === "store").length,
-    dead: all.filter((a) => a.dead).length, never: all.filter((a) => !a.dead && a.usage_known && !a.last_used && !a.running).length,
+    dead: all.filter((a) => a.dead).length, never: all.filter((a) => !a.dead && !a.system_component && a.usage_known && !a.last_used && !a.running).length,
     unknown: all.filter((a) => !a.dead && !a.usage_known).length, withLastUsed: all.filter((a) => a.last_used > 0).length, running: all.filter((a) => a.running).length,
+    components: all.filter((a) => a.system_component).length, componentNames: all.filter((a) => a.system_component).map((a) => a.name).slice(0, 40),
     unknownNames: all.filter((a) => !a.dead && !a.usage_known).map((a) => a.name).slice(0, 40),
-    neverNames: all.filter((a) => !a.dead && a.usage_known && !a.last_used && !a.running && a.kind === "desktop").map((a) => a.name).slice(0, 60),
+    neverNames: all.filter((a) => !a.dead && !a.system_component && a.usage_known && !a.last_used && !a.running && a.kind === "desktop").map((a) => a.name).slice(0, 60),
     measured: all.filter((a) => a.measured).length, hero: document.querySelector("#apps-hero").textContent, sub: document.querySelector("#apps-sub").textContent,
     badge: document.querySelector("#badge-apps").textContent, firstRows: [...document.querySelectorAll(".app .app__name")].slice(0, 6).map((e) => e.textContent),
     top, stale, unresolvedNames: all.filter((a) => /ms-resource|^@\{/.test(a.name)).length,

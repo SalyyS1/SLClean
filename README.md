@@ -134,6 +134,12 @@ thật (số của trình cài chỉ dùng khi không có thư mục), và **l�
 - `chưa từng` = có thư mục cài mà không có bản ghi nào; `không rõ` = registry không ghi thư
   mục cài (MSI hay bỏ trống `InstallLocation`) nên không đối chiếu được; app đang chạy được
   nhận qua tiến trình.
+- **Thành phần hệ thống** (redistributable, runtime, SDK, driver, service, codec, extension…)
+  được tách riêng: tên có từ khoá thành phần **và** không shortcut nào ở Start Menu/Taskbar/
+  Desktop trỏ vào thư mục cài, tức Windows không cho bạn lối mở nào. Nhóm này không tính vào
+  `chưa từng mở`, xếp cuối danh sách và hiện `—` ở cột lần mở, vì gỡ chúng có thể làm app khác
+  hỏng. Điều kiện shortcut giữ lại app tên nghe như thành phần nhưng vẫn mở được (ví dụ
+  `Visual Studio Installer`). Lọc riêng bằng chip `Thành phần`.
 - **Gỡ** luôn chạy trình gỡ của chính hãng (nó tự xin UAC nếu cần) hoặc `Remove-AppxPackage`
   với app Store; xong app kiểm tra lại registry và đề nghị xoá thư mục cài còn sót.
 - **Mục chết** là mục mà trình gỡ (exe) đã mất, thường do xoá tay thư mục app: Settings của
@@ -230,9 +236,9 @@ scripts/
   make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
 ```
 
-Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (45 test: bảo vệ đường dẫn,
+Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` (46 test: bảo vệ đường dẫn,
 xoá file bị khoá, mục nhiều thư mục, đo song song, phân loại artifact, loại trừ, dedupe
 danh mục, phân loại thư mục tạm, quyền admin, Thùng rác, registry, UserAssist, .lnk (đích, AUMID, thư mục làm việc), tách
-lệnh gỡ, ngày cài, app Store, chủ sở hữu thư mục; thêm 3 test `--ignored`: in danh sách app,
+lệnh gỡ, ngày cài, app Store, chủ sở hữu thư mục, nhận diện thành phần hệ thống; thêm 3 test `--ignored`: in danh sách app,
 thư mục thừa của máy hiện tại để soi bằng mắt, thêm một in mọi shortcut đọc được). Test UI: `node scripts/verify-ui-in-headless-chrome.mjs`
 (cần Chrome cài sẵn và `playwright-core` từ `npm install`).

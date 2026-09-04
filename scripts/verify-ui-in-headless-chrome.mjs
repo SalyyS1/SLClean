@@ -19,7 +19,8 @@ const T = (vi, en) => ({ vi, en });
 const app = (id, kind, name, publisher, dir, extra = {}) => ({
   id, kind, name, publisher, version: extra.version ?? "1.0", install_dir: dir, installed: extra.installed ?? NOW - 100 * DAY,
   last_used: extra.last_used ?? 0, usage_known: extra.usage_known ?? true, run_count: extra.run_count ?? 0, running: extra.running ?? false, bytes: extra.bytes ?? 0, files: 0, denied: 0,
-  measured: false, dead: extra.dead ?? false, folder_exists: extra.folder_exists ?? true, needs_admin: extra.needs_admin ?? false, msi: false,
+  measured: false, dead: extra.dead ?? false, system_component: extra.system_component ?? false,
+  folder_exists: extra.folder_exists ?? true, needs_admin: extra.needs_admin ?? false, msi: false,
 });
 const left = (p, area, extra = {}) => ({
   id: `left:${p.toLowerCase()}`, path: p, area, note: T("Cài đặt và dữ liệu của app không còn cài.", "Settings and data of an app that is no longer installed."),
@@ -64,6 +65,8 @@ const FAKE = {
     app("reg:hklm:1:OldGame", "desktop", "Old Game Launcher", "Some Studio", "C:\\Program Files (x86)\\OldGame", { installed: NOW - 400 * DAY, bytes: 1.2 * GB }),
     // MSI không ghi InstallLocation: không có thư mục để đối chiếu nhật ký → "không rõ", không tính là chưa từng mở.
     app("reg:hklm:0:{686EA7E1-608A-4B99-A50A-448A2B2A7E73}", "desktop", "Node.js", "Node.js Foundation", null, { version: "24.1.0", usage_known: false, folder_exists: false, bytes: 0.09 * GB }),
+    // Thành phần nền: không lối mở nào nên không tính là "chưa từng mở", xuống cuối danh sách.
+    app("reg:hklm:1:VCRedist", "desktop", "Microsoft Visual C++ 2013 Redistributable (x64)", "Microsoft Corporation", "C:\\Program Files\\Common Files\\VC", { version: "12.0.40664", system_component: true, bytes: 0.02 * GB }),
   ],
   leftovers: [
     left("C:\\Users\\Salyyy\\AppData\\Local\\Spotify", "appdata", { modified: NOW - 90 * DAY }),
@@ -255,16 +258,19 @@ await page.click('#confirm button[value="cancel"]');
 
 // Tab Ứng dụng: quét lười khi mở lần đầu, sắp "lâu không mở" (mục chết trước), huy hiệu đỏ.
 await page.click('[data-tab="apps"]');
-await page.waitForFunction(() => document.querySelectorAll(".app").length >= 5 && !document.querySelector(".app--measuring") && !document.querySelector("#apps-scanbar:not([hidden])"), null, { timeout: 15000 });
+await page.waitForFunction(() => document.querySelectorAll(".app").length >= 6 && !document.querySelector(".app--measuring") && !document.querySelector("#apps-scanbar:not([hidden])"), null, { timeout: 15000 });
 const appsHero = await page.locator("#apps-hero").textContent();
 const appsSub = await page.locator("#apps-sub").textContent();
 const appsOrder = await page.evaluate(() => [...document.querySelectorAll(".app .app__name")].map((e) => e.textContent));
 const appsBadge = await page.locator("#badge-apps").textContent();
 const appsLastUsed = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll(".app")].map((r) => [r.querySelector(".app__name").textContent, r.querySelectorAll(".app__col b")[0].textContent])));
 await page.screenshot({ path: path.join(shots, "slclean-apps.png") });
-// Bộ lọc "chưa từng mở" không được gom app không rõ (không có thư mục cài).
+// Bộ lọc "chưa từng mở" không được gom app không rõ (không có thư mục cài) hay thành phần nền.
 await page.click('[data-apps-filter="never"]');
 const neverRows = await page.evaluate(() => [...document.querySelectorAll(".app .app__name")].map((e) => e.textContent));
+await page.click('[data-apps-filter="component"]');
+const componentRows = await page.evaluate(() => [...document.querySelectorAll(".app")].map((r) => ({ name: r.querySelector(".app__name").textContent, lastUsed: r.querySelectorAll(".app__col b")[0].textContent, tags: [...r.querySelectorAll(".tag")].map((t) => t.textContent) })));
+await page.click('[data-apps-filter="all"]');
 
 // Bộ lọc "mục chết": 2 hàng, mục dưới HKLM bị khoá (cần admin).
 await page.click('[data-apps-filter="dead"]');
@@ -330,6 +336,6 @@ const leftRowsAfterRescan = await page.evaluate(() => [...items.values()].filter
 const tabStored = await page.evaluate(() => localStorage.getItem("slclean-tab"));
 
 console.log(JSON.stringify({ fonts, rowsCount, heroBytes, tallyAfterScan, measuringLeft, searchRows, groupCounts, enTexts, langSaved, chipCount, savedRoots, toastText, tallyRebuild, gainD, confirmTitle, doneText, nowText, goneRows, tallyAfterClean, quickTitle, overflow,
-  appsHero, appsSub, appsOrder, appsBadge, appsLastUsed, neverRows, deadRows, deadLocked, askDeadTitle, askDeadOptionHidden, toastDead, appsBadgeAfter, askUninstallTitle, askLeftoverTitle, askLeftoverPath, toastLeftover, blockbenchGone, paintUninstallDisabled, appsSearchRows,
+  appsHero, appsSub, appsOrder, appsBadge, appsLastUsed, neverRows, componentRows, deadRows, deadLocked, askDeadTitle, askDeadOptionHidden, toastDead, appsBadgeAfter, askUninstallTitle, askLeftoverTitle, askLeftoverPath, toastLeftover, blockbenchGone, paintUninstallDisabled, appsSearchRows,
   leftHero, leftBadge, leftRows, tallyLeftover, cleanBadge, leftoverConfirmTitle, leftoverDoneText, leftoverGoneRows, leftPackagesRows, leftRowsAfterRescan, tabStored, errors }, null, 2));
 await browser.close();

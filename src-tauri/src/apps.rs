@@ -35,6 +35,9 @@ pub struct AppInfo {
     pub measured: bool,
     /// Mục đăng ký còn nhưng trình gỡ đã mất: chỉ còn cách xoá mục.
     pub dead: bool,
+    /// Thành phần chạy nền (redistributable, runtime, SDK, driver, service…): người dùng không
+    /// bao giờ tự mở nên "chưa từng mở" không có nghĩa gì; không phải ứng viên để gỡ.
+    pub system_component: bool,
     pub folder_exists: bool,
     /// Xoá mục chết dưới HKLM cần quyền admin.
     pub needs_admin: bool,
@@ -86,6 +89,11 @@ impl Usage {
         self.shortcuts.dir_for_name(name).filter(|p| !crate::cleaner::is_root_like(p) && p.is_dir())
     }
 
+    /// Có lối mở app này từ Start Menu/Taskbar/Desktop không.
+    pub fn has_shortcut_into(&self, dir: &Path) -> bool {
+        self.shortcuts.points_into(dir)
+    }
+
     /// (lần cuối, tổng số lần) của mọi bản ghi có đường dẫn nằm dưới `dir`.
     pub fn under_dir(&self, dir: &Path) -> (u64, u32) {
         let prefix = format!("{}\\", lower(dir));
@@ -115,6 +123,25 @@ impl Usage {
     }
 }
 
+/// Từ trong tên nói rằng đây là thành phần chạy nền chứ không phải app để mở.
+const COMPONENT_WORDS: &[&str] = &[
+    "redistributable", "redist", "runtime", "sdk", "driver", "drivers", "service", "services", "framework",
+    "extension", "extensions", "codec", "codecs", "addon", "updater", "installer", "support", "libraries", "runtimes",
+];
+
+/// Tên có từ khoá thành phần (so theo từ, không so chuỗi con: "Discord" không chứa "cord").
+fn name_says_component(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.split(|c: char| !c.is_alphanumeric() && c != '+').any(|w| COMPONENT_WORDS.contains(&w)) || lower.contains("software development kit")
+}
+
+/// Thành phần chạy nền: tên nói vậy **và** Windows không cho người dùng lối mở nào (không
+/// shortcut nào ở Start Menu/Taskbar/Desktop trỏ vào thư mục cài). Điều kiện thứ hai giữ lại
+/// những app tên nghe như thành phần nhưng vẫn mở được, ví dụ "Visual Studio Installer".
+fn is_system_component(name: &str, install_dir: Option<&Path>, usage: &Usage) -> bool {
+    name_says_component(name) && !install_dir.map(|p| usage.has_shortcut_into(p)).unwrap_or(false)
+}
+
 fn from_desktop(d: DesktopApp, usage: &Usage, elevated: bool) -> AppInfo {
     let install_dir = d.install_dir.clone().or_else(|| if d.dead { None } else { usage.dir_by_shortcut_name(&d.name) });
     let (last_used, run_count) = install_dir.as_ref().map(|p| usage.under_dir(p)).unwrap_or((0, 0));
@@ -123,6 +150,7 @@ fn from_desktop(d: DesktopApp, usage: &Usage, elevated: bool) -> AppInfo {
     // Có đường dẫn thư mục cài là đối chiếu được, kể cả khi thư mục đã bị xoá tay: nhật ký
     // UserAssist vẫn giữ bản ghi cũ nên mục chết vẫn cho biết lần mở cuối trước khi xoá.
     let usage_known = install_dir.is_some();
+    let system_component = !d.dead && is_system_component(&d.name, install_dir.as_deref(), usage);
     AppInfo {
         id: d.id(),
         kind: "desktop".into(),
@@ -140,6 +168,7 @@ fn from_desktop(d: DesktopApp, usage: &Usage, elevated: bool) -> AppInfo {
         denied: 0,
         measured: false,
         dead: d.dead,
+        system_component,
         folder_exists,
         needs_admin: d.dead && d.hive == Hive::Hklm && !elevated,
         msi: d.msi,
@@ -166,6 +195,7 @@ fn from_store(s: StoreApp, usage: &Usage) -> AppInfo {
         denied: 0,
         measured: false,
         dead: false,
+        system_component: is_system_component(&s.display, Some(&s.root), usage),
         folder_exists,
         needs_admin: false,
         msi: false,
@@ -253,6 +283,28 @@ mod tests {
         assert_eq!(usage.by_family("Microsoft.Paint_8wekyb3d8bbwe"), (42, 2));
     }
 
+    #[test]
+    fn component_names_are_recognised_by_word() {
+        for n in [
+            "Microsoft Visual C++ 2013 Redistributable (x64) - 12.0.40664",
+            "Microsoft Windows Desktop Runtime - 8.0.24 (x64)",
+            "Windows Software Development Kit - Windows 10.0.26100.7175",
+            "Mozilla Maintenance Service",
+            "TAP-Windows 9.24.2 (driver)",
+            "AV1 Video Extension",
+            "Apple Mobile Device Support",
+        ] {
+            assert!(name_says_component(n), "{n}");
+        }
+        for n in ["Discord", "Blockbench 4.12", "Zoom Workplace", "Steam", "Riot Client", "FL Studio 2025", "Slay the Spire 2"] {
+            assert!(!name_says_component(n), "{n}");
+        }
+        // Có shortcut để mở thì không phải thành phần nền, dù tên nghe như vậy.
+        let usage = Usage::empty();
+        assert!(is_system_component("Microsoft Visual Studio Installer", Some(Path::new(r"C:\Nope")), &usage));
+        assert!(!is_system_component("Discord", Some(Path::new(r"C:\Nope")), &usage));
+    }
+
     /// Máy nào cũng có vài app mà Windows ghi lần mở theo AppUserModelID/shortcut; sau khi đổi
     /// qua exe đích, số bản ghi có đường dẫn phải tăng lên.
     #[test]
@@ -276,6 +328,10 @@ mod tests {
         println!("apps={} desktop={} store={} dead={} with-last-used={} running={}", apps.len(), apps.iter().filter(|a| a.kind == "desktop").count(), apps.iter().filter(|a| a.kind == "store").count(), dead.len(), apps.iter().filter(|a| a.last_used > 0).count(), apps.iter().filter(|a| a.running).count());
         for a in &dead {
             println!("  DEAD {} | dir={:?} exists={} admin={}", a.name, a.install_dir, a.folder_exists, a.needs_admin);
+        }
+        println!("components={}", apps.iter().filter(|a| a.system_component).count());
+        for a in apps.iter().filter(|a| a.system_component) {
+            println!("  COMP {}", a.name);
         }
         let mut used: Vec<_> = apps.iter().filter(|a| a.last_used > 0).collect();
         used.sort_by_key(|a| std::cmp::Reverse(a.last_used));
