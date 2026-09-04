@@ -166,6 +166,7 @@ scripts/
   make-throwaway-artifact-fixture.ps1  dự án giả 3 MB trong D:\tmp
   e2e-delete-fixture-in-real-app.mjs   xoá thật fixture qua hộp xác nhận của app
   measure-recycle-bin-command-in-real-app.mjs  đo lệnh Thùng rác trên app thật, kiểm tra cửa sổ còn trả lời
+  e2e-trash-mode-roundtrip-in-real-app.mjs  dọn fixture có tick và không tick Thùng rác, đếm Thùng rác từ shell Windows
   make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
 ```
 
