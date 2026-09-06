@@ -6,6 +6,9 @@
   gap: 14px;
   padding: 12px 28px 0;
   background: var(--moss);
+  /* Thanh tab bảy mục rộng hơn cửa sổ hẹp; không có min-width: 0 thì nav đẩy cả bố cục ra
+     ngoài khung và mép phải bị cắt, thay vì để thanh tab tự cuộn bên trong. */
+  min-width: 0;
 }
 
 .tabs {
@@ -39,6 +42,12 @@
   transition: color 140ms, background-color 140ms;
 }
 .tab svg { width: 14px; height: 14px; opacity: 0.8; flex: 0 0 auto; }
+/* Cửa sổ hẹp: bỏ icon cho bảy tab vẫn đọc được tên đầy đủ, hơn là để chữ bị cắt hay phải cuộn.
+   Icon chỉ là trang trí — mỗi tab đã có nhãn chữ rồi. */
+@media (max-width: 1340px) {
+  .tab svg { display: none; }
+  .tab { padding: 7px 12px; gap: 6px; }
+}
 .tab:hover { color: var(--bone); background: var(--moss-3); }
 .tab.is-active { color: var(--moss); background: var(--amber); font-weight: 600; }
 .tab.is-active svg { opacity: 1; }

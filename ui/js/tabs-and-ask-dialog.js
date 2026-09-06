@@ -1,9 +1,9 @@
-// Chuyển tab (Dọn dẹp / Ứng dụng / Thư mục thừa), huy hiệu trên tab, và hộp hỏi một câu dùng
-// chung cho gỡ app / xoá mục chết / dọn thư mục còn sót. Nạp sau ledger-view-and-rows.js,
-// trước apps-tab.js và leftovers-tab.js (hai file đó đăng ký hàm quét lười qua `onTabFirstShow`).
+// Chuyển giữa bảy tab, huy hiệu trên tab, và hộp hỏi một câu dùng chung cho gỡ app / xoá mục
+// chết / dọn thư mục còn sót. Nạp sau ledger-view-and-rows.js và trước các file *-tab.js: mỗi
+// tab (trừ Dọn dẹp) đăng ký hàm quét lười qua `onTabFirstShow`, chạy lần đầu tab hiện ra.
 "use strict";
 
-/** Tab đang hiện: "clean" | "apps" | "leftovers". */
+/** Tab đang hiện: "clean" | "apps" | "leftovers" | "files" | "dupes" | "startup" | "history". */
 let activeTab = localStorage.getItem("slclean-tab") || "clean";
 const tabFirstShow = new Map();
 const tabShown = new Set();
@@ -28,11 +28,15 @@ function switchTab(name) {
   }
 }
 
-/** Huy hiệu số trên tab; 0 hoặc rỗng thì ẩn. `warn` tô đỏ (mục chết). */
+/**
+ * Huy hiệu số trên tab; 0 hoặc rỗng thì ẩn. `warn` tô đỏ (mục chết).
+ * Số lớn hơn 99 rút thành "99+": con số chính xác đã nằm ở đầu tab rồi, còn để nguyên thì
+ * huy hiệu bốn chữ số nong tab ra và cả thanh bảy tab bắt đầu tràn.
+ */
 function setTabBadge(name, n, warn) {
   const b = $(`#badge-${name}`);
   b.hidden = !n;
-  b.textContent = n || "";
+  b.textContent = n ? (n > 99 ? "99+" : String(n)) : "";
   b.classList.toggle("tab__badge--warn", !!warn);
 }
 

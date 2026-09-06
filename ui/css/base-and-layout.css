@@ -92,6 +92,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
+  /* Cột lưới mặc định không co xuống dưới bề rộng nội dung: thiếu dòng này, thanh bảy tab đẩy
+     cả bố cục rộng hơn cửa sổ và mép phải bị cắt mất. */
+  min-width: 0;
 }
 
 .board__tools { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
