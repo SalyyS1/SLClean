@@ -1,7 +1,9 @@
 //! Nhật ký dung lượng: sau mỗi lần quét trọn vẹn, ghi lại một "mốc" gồm dung lượng trống của
-//! từng ổ và cỡ của từng mục quét được. So hai mốc cho biết cái gì đã ăn ổ đĩa từ lần trước —
-//! câu hỏi mà mọi công cụ phân tích ổ đĩa khác không trả lời được vì chúng chỉ chụp một thời
-//! điểm. Dữ liệu nằm trong `%APPDATA%\<identifier>\history.json`, không gửi đi đâu.
+//! từng ổ và cỡ của từng mục quét được. So hai mốc cho biết cái gì đã ăn ổ đĩa từ lần trước.
+//! Ý này không mới (DiskBrain, SpaceRover, SizeTrend và `dfp.exe` của Windows đều so được hai
+//! lần chụp); điểm khác của SLClean là mốc được ghi theo *mục đã phân loại* của catalog, nên
+//! phần chênh lệch đọc ra là "cache của X phình 2 GB" thay vì một cây thư mục thô.
+//! Dữ liệu nằm trong `%APPDATA%\<identifier>\history.json`, không gửi đi đâu.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,6 +12,14 @@ use tauri::{AppHandle, Manager};
 
 /// Số mốc giữ lại; cũ hơn thì bỏ. Mỗi mốc vài chục KB nên 60 mốc vẫn nhỏ.
 const MAX_SNAPSHOTS: usize = 60;
+/// Hai lần quét gần nhau hơn khoảng này thì lần sau thay lần trước, thay vì thêm mốc mới.
+///
+/// Ban đầu gộp theo *ngày*, nhưng như thế người mới cài quét bao nhiêu lần trong ngày đầu cũng
+/// chỉ có một mốc, và tab Nhật ký cứ báo "cần thêm một lần quét" suốt cả ngày — trông như hỏng.
+/// Gộp theo một giờ vừa chặn được việc bấm quét liên tục làm loãng nhật ký, vừa cho người dùng
+/// thấy tính năng hoạt động ngay trong ngày đầu.
+const MIN_GAP: u64 = 3_600;
+#[cfg(test)]
 const SECS_PER_DAY: u64 = 86_400;
 
 /// Một mục trong mốc. Không lưu đường dẫn con hay số file để file không phình.
@@ -81,16 +91,11 @@ pub fn save(app: &AppHandle, history: &History) -> Result<(), String> {
     std::fs::write(&path, text).map_err(|e| e.to_string())
 }
 
-/// Ngày (số ngày kể từ epoch) của một mốc, để gộp nhiều lần quét trong cùng một ngày.
-fn day_of(at: u64) -> u64 {
-    at / SECS_PER_DAY
-}
-
-/// Thêm một mốc: mốc cùng ngày với mốc cuối thì thay thế nó (mở app nhiều lần một ngày không
-/// làm loãng nhật ký), rồi cắt còn `MAX_SNAPSHOTS` mốc gần nhất.
+/// Thêm một mốc: quét lại trong vòng `MIN_GAP` thì thay mốc cuối (bấm quét mấy lần liên tiếp
+/// không làm loãng nhật ký), rồi cắt còn `MAX_SNAPSHOTS` mốc gần nhất.
 pub fn push(history: &mut History, snap: Snapshot) {
     match history.snapshots.last() {
-        Some(last) if day_of(last.at) == day_of(snap.at) => {
+        Some(last) if snap.at.saturating_sub(last.at) < MIN_GAP => {
             history.snapshots.pop();
         }
         _ => {}
@@ -199,14 +204,18 @@ mod tests {
     }
 
     #[test]
-    fn same_day_snapshot_replaces_the_previous_one() {
+    fn back_to_back_scans_replace_instead_of_piling_up() {
         let mut h = History::default();
         push(&mut h, snap(SECS_PER_DAY * 10, vec![item("a", 1)]));
-        push(&mut h, snap(SECS_PER_DAY * 10 + 3600, vec![item("a", 2)]));
-        assert_eq!(h.snapshots.len(), 1, "cùng ngày phải gộp");
-        assert_eq!(h.snapshots[0].items[0].bytes, 2, "giữ mốc mới nhất trong ngày");
-        push(&mut h, snap(SECS_PER_DAY * 11, vec![item("a", 3)]));
-        assert_eq!(h.snapshots.len(), 2, "khác ngày thì thêm mốc");
+        push(&mut h, snap(SECS_PER_DAY * 10 + 60, vec![item("a", 2)]));
+        assert_eq!(h.snapshots.len(), 1, "quét lại ngay phải thay mốc cũ");
+        assert_eq!(h.snapshots[0].items[0].bytes, 2, "giữ số của lần quét mới nhất");
+        // Cách nhau đủ lâu thì là mốc mới — kể cả trong cùng một ngày, để người mới cài
+        // vẫn so được hai mốc ngay hôm đầu.
+        push(&mut h, snap(SECS_PER_DAY * 10 + MIN_GAP + 60, vec![item("a", 3)]));
+        assert_eq!(h.snapshots.len(), 2, "cách nhau hơn một giờ thì thêm mốc");
+        push(&mut h, snap(SECS_PER_DAY * 11, vec![item("a", 4)]));
+        assert_eq!(h.snapshots.len(), 3, "hôm sau thì thêm mốc");
     }
 
     #[test]
