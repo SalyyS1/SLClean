@@ -1,4 +1,4 @@
-// Chụp mọi ảnh README trên app thật (mở qua launch-app-with-devtools-port.ps1): ba tab ở tiếng
+// Chụp mọi ảnh README trên app thật (mở qua launch-app-with-devtools-port.ps1): bảy tab ở tiếng
 // Việt, tab Dọn dẹp ở tiếng Anh, và hộp Cài đặt. Chờ quét xong và toast tắt để ảnh sạch.
 // Dùng: node scripts/shoot-all-tabs-in-real-app.mjs [port]
 import { chromium } from "playwright-core";
@@ -35,6 +35,14 @@ const openTab = async (name) => {
     await page.waitForFunction(() => document.querySelectorAll(".app").length > 0 && document.querySelector("#apps-scanbar").hidden, null, { timeout: 10 * 60 * 1000 });
   } else if (name === "leftovers") {
     await page.waitForFunction(() => document.querySelectorAll("#left-list .row").length > 0 && document.querySelector("#left-scanbar").hidden, null, { timeout: 10 * 60 * 1000 });
+  } else if (name === "files") {
+    await page.waitForFunction(() => document.querySelector("#big-scanbar").hidden && document.querySelectorAll("#big-list .row").length > 0, null, { timeout: 20 * 60 * 1000 });
+  } else if (name === "dupes") {
+    await page.waitForFunction(() => document.querySelector("#dup-scanbar").hidden && document.querySelectorAll(".dupe").length > 0, null, { timeout: 30 * 60 * 1000 });
+  } else if (name === "startup") {
+    await page.waitForFunction(() => document.querySelectorAll(".boot").length > 0 && document.querySelector("#start-scanbar").hidden, null, { timeout: 5 * 60 * 1000 });
+  } else if (name === "history") {
+    await page.waitForTimeout(1200);
   }
   await page.waitForTimeout(600);
 };
@@ -55,6 +63,19 @@ await shot("slclean-real-apps-components");
 await page.click('[data-apps-filter="all"]');
 await openTab("leftovers");
 await shot("slclean-real-leftovers");
+await openTab("files");
+await shot("slclean-real-files");
+// Bản đồ theo thư mục là nửa còn lại của tab này, phải có ảnh riêng.
+await page.click('[data-big-view="map"]');
+await page.waitForTimeout(500);
+await shot("slclean-real-files-map");
+await page.click('[data-big-view="list"]');
+await openTab("dupes");
+await shot("slclean-real-dupes");
+await openTab("startup");
+await shot("slclean-real-startup");
+await openTab("history");
+await shot("slclean-real-history");
 
 await openTab("clean");
 await setLang("en");
