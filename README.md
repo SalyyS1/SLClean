@@ -1,386 +1,238 @@
 # SLClean
 
-Xem ổ đĩa Windows của bạn thật sự chứa gì, rồi lấy lại chỗ mà không phải đoán: cache và
-artifact build, app lâu không mở, thư mục app đã gỡ để sót, file đơn lẻ nặng nhất, file trùng
-nhau từng byte, mục tự chạy cùng Windows, và nhật ký cho biết cái gì đã phình ra từ lần trước.
-Desktop app (Tauri 2 + Rust), song ngữ Việt/Anh, không quảng cáo, không gửi dữ liệu đi đâu, và
-không có bước nào tự xoá: bạn tick, bạn xác nhận, rồi nó mới xoá.
+**Local-first Windows disk inspector, AI/developer cache cleaner, and system maintenance utility built with Rust and Tauri 2.**
 
-**Tải bản dùng ngay** ở trang [Releases](../../releases): `SLClean_<version>_x64-setup.exe`
-(bộ cài, cho user hiện tại, không đòi admin) hoặc `SLClean-portable.exe` (chạy không cần
-cài). File chưa ký số nên Windows SmartScreen hỏi lần đầu: chọn *More info → Run anyway*.
+[Tiếng Việt (README.vi.md)](README.vi.md) | [Download Latest Windows Release](https://github.com/SalyyS1/SLClean/releases)
 
-*English:* see what is actually on your Windows drives, then reclaim it without guessing —
-caches and build artifacts, apps you never open, folders left behind by uninstalled apps, your
-heaviest single files, byte-identical duplicates, what starts with Windows, and a history that
-tells you what grew since last time. Tauri 2 + Rust desktop app, Vietnamese/English UI, no ads,
-no telemetry, and nothing is deleted until you tick it and confirm. Grab the installer or the
-portable exe from [Releases](../../releases); the binary is unsigned, so SmartScreen asks once.
+See what actually occupies your Windows drives and reclaim gigabytes without guessing: AI and developer tool caches, project build artifacts, applications you haven't opened in months, orphaned folders left behind by uninstallers, your heaviest single files, byte-identical duplicates, Windows startup entries, and a scan diff journal that shows exactly what grew since your last check.
 
-![Tab Dọn dẹp](scripts/shots/slclean-real-vi.png)
+SLClean ships with a bilingual English/Vietnamese interface (switchable live without restarting), zero ads, zero telemetry, zero outbound network requests, and one strict rule: **nothing is ever deleted automatically**. You inspect the measured sizes, tick what you want removed, and confirm.
 
-## Bảy tab
+### Download for Windows (x64)
 
-| Tab | Làm gì |
+Grab the latest build from [GitHub Releases](https://github.com/SalyyS1/SLClean/releases):
+
+- **`SLClean_<version>_x64-setup.exe`**: Per-user NSIS installer (requires no administrator rights).
+- **`SLClean-portable.exe`**: Standalone single binary that runs directly with zero installation.
+
+*Note: Release binaries are currently unsigned, so Windows SmartScreen will prompt on first launch. Click **More info -> Run anyway** after verifying the release source or `SHA256SUMS.txt`.*
+
+![SLClean Clean tab in English](scripts/shots/slclean-real-en.png)
+
+## Seven Integrated Tabs
+
+| Tab | What It Does |
 |---|---|
-| **Dọn dẹp** | Cache, thư mục tạm và artifact build trên mọi ổ. Đo thật từng mục, phân loại theo mức an toàn. |
-| **Ứng dụng** | Mọi app đã cài kèm lần mở cuối theo Windows ghi. Gỡ app, hoặc xoá mục "chết" mà Settings không gỡ được. |
-| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files mà không app đã cài nào nhận. |
-| **File lớn** | File đơn lẻ từ ngưỡng trở lên, kèm bản đồ dung lượng theo thư mục. |
-| **File trùng** | Nhóm file giống hệt nhau từng byte, để bạn tự chọn bản nào bỏ. |
-| **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |
-| **Nhật ký** | So hai lần quét: cái gì phình ra, cái gì nhỏ lại, cái gì mới xuất hiện. |
+| **Clean** | Scans developer, AI, browser, app, game, and Windows caches alongside project build artifacts across all drives, measuring real disk usage and tagging every item by safety level. |
+| **Apps** | Lists every installed desktop and Microsoft Store app with real measured folder sizes and Windows last-opened dates. Launches official uninstallers or removes dead registry entries that Windows Settings cannot clear. |
+| **Leftovers** | Finds orphaned folders inside `AppData`, `ProgramData`, `Program Files`, and `Local\Packages` unclaimed by any installed app or active process. |
+| **Large Files** | Walks all drives in a single pass to surface individual files above your size threshold alongside a three-level directory usage map. |
+| **Duplicates** | Groups files that are identical byte for byte (size -> first 4 KB -> streaming SHA-256) so you can decide which copy to keep. |
+| **Startup** | Displays Windows startup entries from Registry `Run` keys, Startup folders, and Scheduled Tasks with non-destructive on/off toggles. |
+| **History** | Records a size snapshot after each scan and diffs any two snapshots to highlight what grew, shrank, or newly appeared. |
 
-Cột trái luôn hiện dung lượng trống từng ổ, tổng đã tick, chế độ Thùng rác và nút dọn — mục
-cache, artifact và thư mục thừa dùng chung một nút đó. Tab **File lớn** và **File trùng** cũng
-tick vào cùng giỏ ấy, nên một lần xác nhận dọn được cả bốn loại.
+The persistent left rail displays free space per fixed drive, your live selected byte total, the Recycle Bin mode toggle, live Recycle Bin size (with one-click empty), and a single **Clean selected items** action shared across **Clean**, **Leftovers**, **Large Files**, and **Duplicates**.
 
-## Dọn dẹp
+---
 
-![Tab Dọn dẹp](scripts/shots/slclean-real-vi.png)
+## 1. Clean (Caches, AI Tooling & Build Artifacts)
 
-Con số lớn là tổng tìm thấy, thanh trái là tổng đã tick. Không mục nào bị xoá cho tới khi bạn
-tick và bấm xác nhận; mục `xem lại` (có dữ liệu của bạn) không bao giờ tự tick.
+The hero counter displays total reclaimable space found on the machine, while the left rail tracks only what you have ticked. During a scan, rows stream in live with a `measuring` badge as directories are walked in parallel, then automatically record a snapshot for the **History** journal upon completion.
 
-Trong lúc quét, danh sách hiện ngay với nhãn `đang đo` và số tăng dần; con số lớn ở đầu bảng và
-thanh mảnh bên dưới cho biết tiến độ. Quét xong, SLClean ghi một mốc cho tab Nhật ký.
+### Views & Filtering
 
-### Cách xem và lọc
+- **`Largest first` (default):** Combines caches and project build artifacts into one flat ledger sorted by descending byte size. Switch to **`By group`** to inspect items organized by tool category.
+- **Instant search:** Filter by tool name, directory path, or description; press `Esc` to clear.
+- **Safety filters:** Toggle **`Safe only`** or **`Safe + rebuildable`** to hide higher-caution rows. Already ticked items are never hidden by filters, and zero-byte entries are collapsed automatically with a count indicator.
+- **Quick selection:** **`Quick-clean safe items`** selects visible safe caches and opens the confirmation dialog immediately. **`Select safe`** and **`+ rebuildable`** operate strictly within the currently visible filter scope and skip locked admin items.
 
-- `Lớn nhất trước` (mặc định): trộn cache lẫn artifact vào một danh sách, sắp theo dung
-  lượng giảm dần. `Theo nhóm` chia theo nguồn.
-- Ô tìm kiếm lọc theo tên, đường dẫn hoặc ghi chú; `Esc` để xoá.
-- `Chỉ an toàn` / `An toàn + tạo lại được`: ẩn các mục còn lại. Mục đã tick không bao giờ bị
-  ẩn. Mục rỗng cũng được ẩn cho gọn; dòng chữ bên phải cho biết đang ẩn bao nhiêu.
-- `Dọn nhanh phần an toàn`: tick mọi mục an toàn đang hiện rồi mở thẳng hộp xác nhận.
-- `Chọn an toàn` / `+ tạo lại được` chỉ tick trong phạm vi đang hiện và bỏ qua mục cần admin.
-- Bấm bất kỳ đâu trên một hàng cũng tick được. Cách xem, bộ lọc, ngôn ngữ được nhớ lại.
+### Safety Classification
 
-### Cách phân loại
-
-| Nhãn | Nghĩa | Tự tick |
+| Badge | Meaning | Pre-Selected by Quick Safe? |
 |---|---|---|
-| (không nhãn) | cache thuần, app tự tạo lại khi cần | có |
-| `tạo lại được` | mất thì phải tải/build lại (`npm install`, `cargo build`, Gradle deps) | không |
-| `xem lại` | có dữ liệu của bạn: transcript AI, backup, thư mục tạm cá nhân | không |
-| `cần admin` | thư mục hệ thống, chỉ dọn được khi chạy elevated — ô tick bị khoá | không |
-| `một phần` | có thư mục con không đọc được nên số đo thiếu | — |
+| *(unlabeled / Safe)* | Pure cache that applications recreate automatically on next run | Yes |
+| `rebuildable` | Re-downloaded or recompiled when needed (`npm install`, `cargo build`, Gradle dependencies) | No |
+| `review` | Contains user session data, AI conversation transcripts, backups, or personal temp files | Never |
+| `needs admin` | System-owned cache requiring elevation; checkbox stays locked until relaunched as administrator | No |
+| `partial` | Contains subdirectories unreadable without higher permissions, so measured size is a lower bound | N/A |
 
-### Những gì được quét
+### Comprehensive Detection Catalog
 
-Không có đường dẫn nào ghi cứng theo máy. Mọi vị trí suy từ biến môi trường Windows
-(`%LOCALAPPDATA%`, `%APPDATA%`, `%TEMP%`, `%SystemRoot%`, `%ProgramData%`) hoặc của công cụ
-(`CARGO_HOME`, `GRADLE_USER_HOME`, `GOPATH`, `GOCACHE`, `PIP_CACHE_DIR`, `UV_CACHE_DIR`,
-`PLAYWRIGHT_BROWSERS_PATH`…). Mục không tồn tại trên máy thì không hiện.
+SLClean contains zero hardcoded machine paths. Every location is resolved dynamically from Windows environment variables (`%LOCALAPPDATA%`, `%APPDATA%`, `%TEMP%`, `%SystemRoot%`, `%ProgramData%`) and developer toolchain variables (`CARGO_HOME`, `GRADLE_USER_HOME`, `GOPATH`, `GOCACHE`, `PIP_CACHE_DIR`, `UV_CACHE_DIR`, `PLAYWRIGHT_BROWSERS_PATH`). Non-existent paths are omitted silently.
 
-- **Công cụ AI:** Claude Code (transcript, file-history, shell snapshots, debug, todo,
-  paste cache, temp), Codex CLI (sessions, log, archived), Orca, Gemini CLI, Hugging Face,
-  PyTorch, Ollama, LM Studio, Playwright, Puppeteer, chrome-devtools-mcp.
-- **Kho gói:** npm, pnpm, Yarn, Bun, Deno, pip, uv, Poetry, Cargo (registry cache/src, git),
-  rustup downloads, Go (mod + build cache), Gradle (caches, daemon, wrapper, JDK tự tải),
-  Maven, NuGet, Composer, pub, Scoop, Android, Electron, node-gyp, Cypress, Unity, Unreal DDC.
-- **Trình soạn thảo:** mọi app họ VS Code phát hiện qua `User\workspaceStorage` (VS Code,
-  Insiders, Cursor, Windsurf, Trae, VSCodium…): cache, VSIX đã tải, logs, workspaceStorage,
-  lịch sử file cục bộ. JetBrains: từng sản phẩm dưới `%LOCALAPPDATA%\JetBrains`.
-- **Trình duyệt:** *từng profile* của Chrome, Chrome Beta/Canary, Edge, Brave, Vivaldi,
-  Chromium, Arc, Cốc Cốc, Opera/GX (Cache, Code Cache, GPUCache, Dawn, Service Worker) với
-  tên profile lấy từ `Local State`; Firefox, Zen, Floorp, LibreWolf, Waterfox (cache2,
-  startupCache, thumbnails). Đăng nhập, mật khẩu, bookmark không nằm trong các thư mục này.
-- **Ứng dụng:** mọi app Electron có `Cache` + `Code Cache` dưới Roaming/Local (Discord,
-  Claude Desktop, Slack, Figma, Notion, Blockbench, Termius…), Spotify, Telegram, Zoom,
-  OneDrive logs, Adobe media cache, Remote Desktop, app Microsoft Store (`TempState`,
-  `AC\INetCache`).
-- **Game:** Steam (shader cache ở mọi thư viện đọc từ `libraryfolders.vdf`, tải dở, web
-  cache), Minecraft launcher (webcache, logs, assets/libraries, versions), Modrinth, Prism,
-  Epic.
-- **Windows:** Temp người dùng, `Windows\Temp`, Windows Update Download, Delivery
-  Optimization, CBS logs, WER, CrashDumps, D3DSCache, shader cache NVIDIA/AMD/Intel, driver
-  NVIDIA đã tải, INetCache, thumbnail cache, Package Cache (Visual Studio).
-- **Thư mục tạm ở gốc ổ đĩa và thư mục home:** `tmp`, `temp`, `*-temp`, `tmp-*`…
-  (đánh dấu `xem lại`), `OneDriveTemp`/`WUDownloadCache`/`DeliveryOptimization` (an toàn),
-  `$WinREAgent`/`$WINDOWS.~BT`/`Windows.old` (xem lại, cần admin).
-- **Artifact build:** `node_modules`, `target` (cạnh Cargo.toml/pom.xml), `build`, `out`,
-  `dist`, `bin`/`obj` (.NET), `.venv`, `__pycache__`, `.next`, `.nuxt`, `.turbo`, `.gradle`,
-  `.kotlin`, `Library`/`Temp` (Unity), `cmake-build-*`, `run` (server test Paper)… Mỗi cái
-  đối chiếu với dấu hiệu dự án bên cạnh để không nhầm thư mục trùng tên. Thư mục cài Node
-  (nvm/fnm) và app Electron đã cài (`resources\app`, `.asar.unpacked`, msys, Program Files)
-  không bao giờ bị coi là artifact.
+- **AI & LLM Tooling:** `Claude Code` (session transcripts, file-history, shell snapshots, debug logs, todo lists, paste cache, temp), `Codex CLI` (sessions, logs, archived runs), `Gemini CLI`, `Orca`, `Hugging Face` model/dataset caches, `PyTorch`, `Ollama`, `LM Studio`, `Playwright` browser binaries, `Puppeteer`, and `chrome-devtools-mcp`.
+- **Package Managers & Compilers:** `npm`, `pnpm`, `Yarn`, `Bun`, `Deno`, `pip`, `uv`, `Poetry`, `Cargo` (registry cache/src and git checkouts), `rustup` downloads, `Go` (`GOMODCACHE` and `GOCACHE`), `Gradle` (caches, daemon logs, wrapper distributions, auto-provisioned JDKs), `Maven`, `NuGet`, `Composer`, `Dart/Flutter pub`, `Scoop`, `Android`, `Electron`, `node-gyp`, `Cypress`, `Unity`, and `Unreal Engine DDC`.
+- **IDEs & Code Editors:** Automatically discovers every VS Code family editor via `User\workspaceStorage` (`VS Code`, `VS Code Insiders`, `Cursor`, `Windsurf`, `Trae`, `VSCodium`), covering caches, downloaded VSIX extensions, logs, `workspaceStorage`, and local file history, plus per-product `JetBrains` directories under `%LOCALAPPDATA%\JetBrains`.
+- **Web Browsers (Per-Profile):** Enumerates individual profiles of `Chrome` (Stable, Beta, Canary), `Edge`, `Brave`, `Vivaldi`, `Chromium`, `Arc`, `Coc Coc`, and `Opera` / `Opera GX` using profile names parsed from `Local State` (`Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `Service Worker`), alongside `Firefox`, `Zen`, `Floorp`, `LibreWolf`, and `Waterfox` (`cache2`, `startupCache`, `thumbnails`). Browser logins, saved passwords, cookies, and bookmarks live outside these cache folders and are never touched.
+- **Desktop & Microsoft Store Apps:** Dynamically detects Electron apps storing `Cache` + `Code Cache` under `Roaming` or `Local` (`Discord`, `Claude Desktop`, `Slack`, `Figma`, `Notion`, `Blockbench`, `Termius`), plus `Spotify`, `Telegram`, `Zoom`, `OneDrive` logs, `Adobe` media cache, `Remote Desktop`, and Microsoft Store app caches (`TempState`, `AC\INetCache`).
+- **Games & Launchers:** `Steam` (shader caches across all library folders parsed from `libraryfolders.vdf`, incomplete downloads, web cache), `Minecraft` launcher (webcache, logs, assets/libraries, versions), `Modrinth`, `Prism Launcher`, and `Epic Games`.
+- **Windows & GPU Caches:** User `%TEMP%`, `Windows\Temp`, Windows Update Downloads, Delivery Optimization, CBS logs, Windows Error Reporting (`WER`), CrashDumps, `D3DSCache`, `NVIDIA` / `AMD` / `Intel` GPU shader caches, extracted NVIDIA driver installers, `INetCache`, Explorer thumbnail caches, and Visual Studio `Package Cache`.
+- **Root & Home Temp Folders:** `tmp`, `temp`, `*-temp`, `tmp-*` (tagged `review`), `OneDriveTemp` / `WUDownloadCache` / `DeliveryOptimization` (safe), and `$WinREAgent` / `$WINDOWS.~BT` / `Windows.old` (tagged `review` + `needs admin`).
+- **Project Build Artifacts:** Walks all fixed drives and user folders to locate `node_modules`, `target` (verified beside `Cargo.toml` or `pom.xml`), `build`, `out`, `dist`, `.NET` `bin`/`obj`, `.venv`, `__pycache__`, `.next`, `.nuxt`, `.turbo`, `.gradle`, `.kotlin`, Unity `Library`/`Temp`, `cmake-build-*`, and Paper server test `run` directories. Every match requires a sibling project manifest so folders that merely share a name are never flagged. Node version managers (`nvm`, `fnm`), installed Electron bundles (`resources\app`, `.asar.unpacked`), `msys`, `Program Files`, `Windows`, `Steam`, and `OneDrive` are strictly excluded.
 
-Artifact được tìm trên **mọi ổ đĩa cố định và thư mục người dùng**, bỏ qua Windows, Program
-Files, ProgramData, WindowsApps, Steam, msys, OneDrive và các thư mục `.x` trong home. Hộp
-**Cài đặt** cho thêm thư mục (ổ mạng, ổ ngoài) hoặc loại trừ nơi không muốn quét.
+---
 
-## Ứng dụng
+## 2. Apps (Installed Software & Last-Opened Telemetry)
 
-![Tab Ứng dụng](scripts/shots/slclean-real-apps.png)
+![SLClean Apps tab](scripts/shots/slclean-real-apps.png)
 
-Liệt kê mọi app đã đăng ký với Windows: ba nhánh `Uninstall` trong registry (HKLM 64/32-bit,
-HKCU) và app Store của user hiện tại (`AppModel\Repository\Packages`, tên `ms-resource:` được
-dịch qua `SHLoadIndirectString`). Mỗi app có hãng, phiên bản, ngày cài, dung lượng thư mục cài
-**đo thật** (số của trình cài chỉ dùng khi không có thư mục), và **lần mở cuối** theo Windows
-ghi. Sắp theo lâu không mở / lớn nhất / mới cài / tên.
+Enumerates every application registered with Windows across all three `Uninstall` registry hives (`HKLM` 64-bit, `HKLM` 32-bit, `HKCU`) and current-user Microsoft Store packages (`AppModel\Repository\Packages`, resolving `ms-resource:` indirect names via `SHLoadIndirectString`). Each row displays publisher, version, install date, **real measured install folder size** (falling back to installer estimates only when no folder is recorded), and **Last opened** date. Sort by `Least used`, `Largest`, `Newest`, or `Name`.
 
-Lần mở cuối lấy từ UserAssist trong HKCU (không cần admin): mỗi lần mở app qua
-Explorer/Start/Taskbar, Windows ghi số lần và giờ lần cuối, tên bị mã ROT13 và tiền tố Program
-Files thay bằng GUID thư mục chuẩn. Windows ghi nhiều app theo AppUserModelID hoặc shortcut
-`.lnk` chứ không theo exe, nên app đọc thêm shortcut Start Menu/Taskbar/Desktop (định dạng
-MS-SHLLINK, không qua COM) để nối ID ↔ exe ↔ thư mục cài. App mở từ dòng lệnh hoặc tự chạy cùng
-Windows có thể không có bản ghi: `chưa từng` = có thư mục cài mà không có bản ghi nào, `không
-rõ` = registry không ghi thư mục cài (MSI hay bỏ trống `InstallLocation`) nên không đối chiếu
-được. App đang chạy được nhận qua tiến trình.
+To determine when an app was last opened without requiring administrator privileges, SLClean decodes Windows `UserAssist` records in `HKCU` (ROT13-encoded keys and Known Folder GUID prefixes) and parses Start Menu, Taskbar, and Desktop `.lnk` binary files directly via the `MS-SHLLINK` format (without slow COM instantiation) to map `AppUserModelID` -> executable -> install directory. Currently running apps are flagged live via process enumeration.
 
-**Thành phần chạy nền** (redistributable, runtime, SDK, driver, service, codec, extension…)
-được tách thành nhóm riêng để không lẫn vào danh sách app đáng gỡ — trên máy thử, việc này đưa
-24 mục ra khỏi nhóm "chưa từng mở", giảm 84 xuống 60:
+### Background System Component Separation
 
-![Bộ lọc thành phần hệ thống](scripts/shots/slclean-real-apps-components.png)
+Runtimes, redistributables, SDKs, drivers, services, and codecs are automatically separated from regular user apps when their name matches component keywords **and** no Start Menu, Taskbar, or Desktop shortcut points into their install folder (keeping launchable tools like `Visual Studio Installer` in the main list while moving non-interactive redistributables out of `Never opened`):
 
-Điều kiện tách: tên có từ khoá thành phần **và** không shortcut nào ở Start Menu/Taskbar/Desktop
-trỏ vào thư mục cài, tức Windows không cho bạn lối mở nào. Nhóm này không tính vào `chưa từng
-mở`, xếp cuối danh sách và hiện `—` ở cột lần mở, vì gỡ chúng có thể làm app khác hỏng. Điều
-kiện shortcut giữ lại app tên nghe như thành phần nhưng vẫn mở được (ví dụ `Visual Studio
-Installer`). Lọc riêng bằng chip `Thành phần`.
+![SLClean background components filter](scripts/shots/slclean-real-apps-components.png)
 
-- **Gỡ** luôn chạy trình gỡ của chính hãng (nó tự xin UAC nếu cần) hoặc `Remove-AppxPackage`
-  với app Store; xong app kiểm tra lại registry và đề nghị xoá thư mục cài còn sót.
-- **Mục chết** là mục mà trình gỡ (exe) đã mất, thường do xoá tay thư mục app: Settings của
-  Windows không gỡ được nữa, nút `Xoá mục` xoá khoá registry đó (kèm thư mục sót nếu chọn).
-  Mục dưới HKLM cần chạy với quyền admin; MSI không bao giờ bị coi là chết vì `msiexec` gỡ
-  theo mã sản phẩm.
+- **Uninstall:** Always invokes the vendor's official uninstaller (or `Remove-AppxPackage` for Store apps), waits for completion, re-checks the registry, and offers to clean up any leftover install folder.
+- **Dead entries:** Identifies registry entries whose uninstaller executable was already deleted manually (which Windows Settings fails to remove) and lets you delete the stale registry key cleanly (`msiexec` product-code entries are never treated as dead).
 
-## Thư mục thừa
+---
 
-![Tab Thư mục thừa](scripts/shots/slclean-real-leftovers.png)
+## 3. Leftovers (Orphaned App Folders)
 
-Thư mục con trực tiếp của `AppData\Local`, `Roaming`, `LocalLow`, `ProgramData`, `Program
-Files (x86)`, `Local\Programs` và `Local\Packages` mà **không app đã cài nào nhận**: không app
-nào trỏ thư mục cài vào đó, tên thư mục không khớp tên/hãng app nào (đã chuẩn hoá, kể cả tên
-gói Store và exe đã chạy 6 tháng qua), không có tiến trình chạy từ đó. Thư mục Windows, tool
-dev và mọi thứ đã có mục riêng trong tab Dọn dẹp không bao giờ được nêu.
+![SLClean Leftovers tab](scripts/shots/slclean-real-leftovers.png)
 
-Mỗi mục có nhãn vùng, `có exe` (app portable, xem kỹ) và lần mở cuối nếu Windows từng ghi; mục
-trong Program Files/ProgramData cần admin. Tick rồi dọn bằng nút ở thanh trái như mục cache, cả
-thư mục bị xoá (không giữ gốc). Đây là heuristic: luôn xem tên trước khi tick.
+Scans top-level folders inside `AppData\Local`, `Roaming`, `LocalLow`, `ProgramData`, `Program Files (x86)`, `Local\Programs`, and `Local\Packages` that **no installed application claims**: no registered install location points there, normalized folder names match no installed app, publisher, Store package, or executable launched in the last six months, and no running process originates inside them. Built-in Windows folders, developer toolchains, and paths already covered by the **Clean** tab are excluded.
 
-## File lớn
+Each row highlights its parent area, flags **`has exe`** when executables are present (for example, a portable app you still use), and shows any historical Windows launch timestamp so you can inspect unfamiliar folders in Explorer before ticking them.
 
-![Tab File lớn](scripts/shots/slclean-real-files.png)
+---
 
-Sổ cái chỉ đo được cả thư mục, nên một file 4 GB nằm lẻ trong Downloads không bao giờ lộ ra.
-Tab này đi một lượt qua mọi ổ và trả về hai thứ cùng lúc: danh sách file từ ngưỡng trở lên
-(mặc định 100 MB, đổi được), và bản đồ dung lượng theo thư mục ba cấp đầu để lần ra chỗ chứa:
+## 4. Large Files (Single-Pass Heavy Files & Folder Map)
 
-![Bản đồ theo thư mục](scripts/shots/slclean-real-files-map.png)
+Cache ledgers measure whole directories, meaning a forgotten 4 GB `.iso` or `.zip` sitting in `Downloads` would otherwise stay invisible. The **Large Files** tab walks your drives in a single background pass (cancellable at any time) and produces two views:
 
-Đây là file của bạn, không phải rác, nên **không mục nào được tự tick**. Bản đồ cộng cả file
-nhỏ nên tổng của nó lớn hơn danh sách file. File Windows tự quản (`pagefile.sys`,
-`hiberfil.sys`, `swapfile.sys`, `dumpstack.log`) vẫn được nêu để giải thích chỗ trống đi đâu
-nhưng bị khoá không cho tick — muốn bỏ thì tắt tính năng tương ứng của Windows, đừng xoá tay.
-Thư mục không đọc được vì thiếu quyền được đếm và báo lại để bạn biết kết quả còn thiếu.
+- **File list:** Every individual file at or above your size threshold (default `100 MB`, adjustable).
+- **By folder:** A three-level directory usage map summing all files (including small ones) so you can trace where disk space went.
 
-Quét không cần admin và không phụ thuộc NTFS nên chạy được cả ổ ngoài và ổ mạng, đổi lại phải
-đi từng thư mục nên chậm hơn công cụ đọc thẳng bảng MFT — vì vậy nó chạy nền, phát dần kết quả
-và huỷ được bất cứ lúc nào.
+Because these are your personal files rather than cache junk, **nothing is pre-selected**. Windows-managed system files (`pagefile.sys`, `hiberfil.sys`, `swapfile.sys`, `dumpstack.log`) are shown so missing gigabytes are accounted for, but their checkboxes are locked with guidance on turning off hibernation or adjusting virtual memory safely through Windows Settings. Because the scanner walks standard filesystem APIs instead of requiring raw NTFS Master File Table elevation, it works without administrator rights and supports external and network drives.
 
-## File trùng
+---
 
-![Tab File trùng](scripts/shots/slclean-real-dupes.png)
+## 5. Duplicates (Byte-Identical 3-Stage Hashing)
 
-Chỉ nhóm file **giống hệt nhau từng byte**, không đoán theo tên hay ảnh trông giống nhau: gom
-theo cỡ → băm 4 KB đầu → băm SHA-256 toàn file. File chỉ có một mình ở cỡ của nó thì không bao
-giờ bị đọc, và file 4 GB được băm theo khối chứ không nằm hết trong RAM. Ngưỡng mặc định 1 MB
-(đổi được): bản sao của file nhỏ thì nhiều vô kể mà chẳng lấy lại được bao nhiêu chỗ.
+Groups files that are **100% identical byte for byte**, never guessing from filenames or fuzzy image similarity:
 
-Bỏ qua những nơi mà trùng nhau là **đúng thiết kế**: mã nguồn và kho gói của công cụ lập trình
-(`node_modules`, `.git`, `.cargo`, `.gradle`, `.m2`, `.nuget`, `.venv`…) — một jar nằm trong
-mười cache Gradle là bình thường, muốn lấy lại chỗ thì dọn cả cache ở tab Dọn dẹp chứ không xoá
-lẻ từng file rồi hỏng build. Cũng bỏ qua vùng do chương trình quản (Program Files, ProgramData,
-AppData, thư mục Windows): đo trên máy thật thì đó là 1556 nhóm, phần lớn là hai bản Edge cài
-song song, runtime và bản build cũ của app — xoá là hỏng app.
+1. **Exact byte size:** Unique file sizes are discarded immediately without reading file contents.
+2. **First 4 KB hash:** Quickly eliminates same-size files with different headers.
+3. **Streaming full-file SHA-256:** Reads candidate files in fixed chunks so multi-gigabyte archives or videos never spike RAM usage (default minimum size `1 MB`, configurable).
 
-App **không tick hộ bạn bản nào**. Nhãn `cũ nhất` / `mới nhất` / `cùng thư mục` chỉ là gợi ý để
-quyết nhanh; nếu bạn tick cả mọi bản trong một nhóm, app cảnh báo rằng dọn xong là mất hẳn file
-đó.
+Directories where duplicate files exist by design are skipped automatically: developer package stores and VCS trees (`node_modules`, `.git`, `.cargo`, `.gradle`, `.m2`, `.nuget`, `.venv`) as well as application-managed system roots (`Program Files`, `ProgramData`, `AppData`, `Windows`), where deleting individual shared DLLs or side-by-side browser runtimes breaks installed software.
 
-## Khởi động
+SLClean **never selects a copy for you**. Badges such as `oldest`, `newest`, and `same folder` serve purely as visual hints, and selecting every copy in a group triggers an explicit data-loss warning before cleanup.
 
-![Tab Khởi động](scripts/shots/slclean-real-startup.png)
+---
 
-Mục tự chạy cùng Windows từ ba nguồn: khoá `Run` (HKCU, HKLM, HKLM WOW64), thư mục Startup (của
-bạn và của mọi người dùng), và scheduled task có trigger lúc đăng nhập/khởi động. Mỗi mục hiện
-**lệnh đầy đủ** như đã đăng ký, nguồn, và lần mở cuối của exe đích nếu Windows từng ghi.
+## 6. Startup (Non-Destructive Boot & Logon Control)
 
-Bật/tắt (không xoá) đúng cách Task Manager làm: ghi cờ vào `Explorer\StartupApproved\*` cho Run
-và thư mục Startup, `schtasks /Change` cho task. Mục đã tắt vẫn nằm nguyên trong registry nên
-bật lại lúc nào cũng được, kể cả bằng Task Manager.
+Collects startup programs from three Windows sources: Registry `Run` keys (`HKCU`, `HKLM`, `HKLM WOW64`), user and machine `Startup` folders, and Scheduled Tasks configured with logon or boot triggers. Each row shows the exact command string, source location, and last-opened date when available.
 
-Lọc theo `Đang bật`, `Lâu không dùng`, `Hỏng`. Mục `hỏng` là lệnh trỏ tới file không còn trên
-máy — nó không chạy được nữa, chỉ nằm đó gây rối, và có nút `Xoá mục` riêng. Mục chạy từ thư
-mục Windows được dán nhãn `của Windows`; mục ở phạm vi máy cần quyền admin để sửa.
+Toggling an entry **Off** is completely non-destructive and 100% compatible with Windows Task Manager: SLClean writes standard `Explorer\StartupApproved\*` flags for Registry/Startup entries and invokes `schtasks /Change` for scheduled tasks, leaving the underlying registration intact so you can re-enable it anytime. Entries whose target file no longer exists on disk are flagged **`broken`** with a dedicated **`Delete entry`** button, while built-in `\Microsoft\` system tasks are hidden to prevent accidental OS breakage.
 
-## Nhật ký
+---
 
-![Tab Nhật ký](scripts/shots/slclean-real-history.png)
+## 7. History (Scan Diff Journal)
 
-Sau mỗi lần quét trọn vẹn, SLClean ghi một mốc gồm dung lượng trống của từng ổ và cỡ của từng
-mục quét được. Chọn hai mốc để xem **cái gì đã ăn ổ đĩa từ lần trước** — thứ mà một lần quét
-đơn lẻ không trả lời được. Lọc theo `Phình ra`, `Nhỏ lại`, `Mới xuất hiện`.
+After every completed scan, SLClean saves a compact snapshot recording per-drive free space and the measured byte size of every catalog item (`%APPDATA%\vn.salyyy.slclean\history.json`, retaining up to 60 snapshots and coalescing rescans within the same hour). Pick any two snapshots and filter by **`Grew`**, **`Shrank`**, or **`New`** to see what quietly consumed gigabytes since last week.
 
-Giữ tối đa 60 mốc; quét lại trong vòng một giờ thì thay mốc cũ chứ không thêm mốc mới. Nhật ký
-nằm ở `%APPDATA%\vn.salyyy.slclean\history.json`, không gửi đi đâu. Mục "mới xuất hiện" thường
-do bạn vừa thêm thư mục quét chứ không phải dung lượng thật tăng.
+---
 
-## Cài đặt
+## Settings, Safety Guarantees & Administrator Mode
 
-![Hộp cài đặt](scripts/shots/slclean-settings.png)
+![SLClean Settings dialog](scripts/shots/slclean-settings.png)
 
-Ngôn ngữ (theo hệ thống / Việt / Anh), thư mục quét thêm hoặc loại trừ, và chế độ Thùng rác.
-Cài đặt lưu ở `%APPDATA%\vn.salyyy.slclean\settings.json`. Không có gì được gửi đi đâu.
+### Safety Guarantees
 
-Toàn bộ giao diện có bản tiếng Anh, đổi ngay không cần mở lại app:
+- **Zero automatic deletion:** Scanning is strictly read-only. Nothing is moved or deleted until you tick items and confirm in the review dialog. Selection batches containing `review` items display an explicit warning banner.
+- **Recycle Bin by default:** Toggle **Move to Recycle Bin instead of deleting** in the left rail (and set it as your launch default in Settings). Recycle Bin queries and emptying use single native Win32 shell calls (`SHQueryRecycleBin` / `SHEmptyRecycleBin`).
+- **Hardcoded backend path guard:** Even if a path were passed to the backend directly, `cleaner.rs` unconditionally refuses drive roots, `%SystemRoot%`, `Program Files` roots and Windows/Microsoft/runtime subdirectories inside them, `ProgramData` root, user home roots and core profile directories, `.ssh`, developer tool homes (`.cargo`, `.gradle`, `.claude`), and `WindowsApps`.
+- **Graceful lock handling:** Files currently held open by running apps are skipped cleanly and reported in the completion summary without aborting the rest of the cleanup.
+- **100% local & offline:** Settings (`settings.json`) and scan history (`history.json`) live locally under `%APPDATA%\vn.salyyy.slclean\`. No analytics, crash uploads, or network calls exist.
 
-![English UI](scripts/shots/slclean-real-en.png)
+### Administrator Mode
 
-## Quyền admin
+Clicking **`Run as administrator`** in the bottom-left corner relaunches SLClean elevated via Windows UAC and hands off cleanly from the non-elevated instance (`--after-pid`). While running as a standard user, system-scoped items (`Windows\Temp`, Windows Update caches, `Windows.old`, `HKLM` dead entries, machine-wide startup items) remain visibly measured with locked checkboxes rather than failing mid-cleanup.
 
-Nút `Chạy với quyền admin` ở góc dưới trái mở lại app qua UAC rồi tự đóng bản hiện tại. Khi
-chưa elevated, các mục `cần admin` (dưới `%SystemRoot%`, `%ProgramData%`, `$WinREAgent`,
-`$WINDOWS.~BT`, `Windows.old`, thư mục thừa trong Program Files/ProgramData, mục chết dưới
-HKLM, mục khởi động phạm vi máy) bị khoá thay vì báo lỗi lúc dọn.
+---
 
-## Chạy từ mã nguồn
+## Build from Source
 
-Cần Rust (stable, MSVC) và Node 18+. Lần đầu chạy `npm install` để lấy Tauri CLI.
+### Prerequisites
 
-```
+- Windows 10 or Windows 11 (x64)
+- **Rust** (stable toolchain, `x86_64-pc-windows-msvc`)
+- **Node.js 18+** (used solely to install and invoke `@tauri-apps/cli` and optional UI test scripts)
+
+### Run in Development
+
+```bat
+npm install
 run-slclean.cmd
 ```
 
-Hoặc trực tiếp: `src-tauri\target\debug\slclean.exe`. App tự quét tab Dọn dẹp khi mở (khoảng
-15 s trên máy có ~450 mục; lần đầu có thể lâu hơn vì Windows chưa cache metadata). Các tab File
-lớn, File trùng, Khởi động chỉ quét khi bạn mở chúng lần đầu.
+Or launch `src-tauri\target\debug\slclean.exe` directly after building. On launch, SLClean scans the **Clean** tab automatically (typically ~15 seconds across ~450 catalog entries), while **Large Files**, **Duplicates**, and **Startup** scan lazily when first opened.
 
-Bản cài đặt (.exe NSIS, không cần Rust để chạy):
+### Build Release Installer & Portable Binary
 
-```
-npm run build          # = npx tauri build; cần ~2 GB trống cho thư mục build
+```bat
+npm run build
 ```
 
-Kết quả ở `src-tauri\target\release\bundle\nsis\SLClean_<version>_x64-setup.exe`, cạnh đó là
-`src-tauri\target\release\slclean.exe` chạy không cần cài. Cài cho user hiện tại, không đòi
-admin. Nếu ổ chứa dự án chật, trỏ thư mục build sang ổ khác trước khi chạy lệnh trên:
+This runs `npx tauri build` (requiring ~2 GB of free disk space for Rust build artifacts) and outputs:
 
-```
-set CARGO_TARGET_DIR=C:\tmp\slclean-release-out
-```
+- **NSIS per-user installer:** `src-tauri\target\release\bundle\nsis\SLClean_<version>_x64-setup.exe`
+- **Portable executable:** `src-tauri\target\release\slclean.exe`
 
-khi đó kết quả nằm ở `C:\tmp\slclean-release-out\release\...`. Để phát hành,
-`powershell -File scripts\make-release-bundles.ps1` làm trọn bước này rồi gom bộ cài, exe
-portable và `SHA256SUMS.txt` vào `release\`; đính ba file đó lên GitHub Release.
+If your workspace drive is low on disk space, redirect Cargo's build directory first (`set CARGO_TARGET_DIR=C:\tmp\slclean-release-out`), or run `powershell -File scripts\make-release-bundles.ps1` to build and package the setup installer, portable executable, and `SHA256SUMS.txt` into `release\`.
 
-## Giới hạn đã biết
+### Project Structure & Tests
 
-- File đang mở bị bỏ qua và báo số lượng, không làm hỏng cả mục.
-- Đường dẫn được bảo vệ (gốc ổ đĩa, `%SystemRoot%`, gốc Program Files và các thư mục
-  Windows/Microsoft/runtime bên trong, gốc ProgramData, thư mục home và các thư mục con
-  chính, tool home như `.cargo`/`.gradle`/`.claude`, `.ssh`, WindowsApps) bị từ chối ngay cả
-  khi UI gửi lên. Thư mục app của hãng thứ ba trong Program Files thì dọn được (thư mục thừa).
-- Lần mở cuối chỉ biết những gì Windows ghi vào UserAssist; app chạy từ terminal, từ
-  launcher khác, hoặc bằng tài khoản khác không có bản ghi. Tab Thư mục thừa là heuristic
-  theo tên: một thư mục của app portable đặt tên khác app có thể bị liệt kê, nên xem trước
-  khi tick.
-- File lớn và File trùng đi từng thư mục nên chậm hơn công cụ đọc thẳng bảng MFT của NTFS; đổi
-  lại không cần admin và chạy được cả ổ không phải NTFS. File trùng cố ý không xét vùng do
-  chương trình quản (Program Files, ProgramData, AppData) — bản trùng ở đó gần như luôn là cố ý.
-- Tab Nhật ký cần ít nhất hai mốc mới so được, tức phải quét xong ít nhất hai lần cách nhau
-  trên một giờ.
-- Chưa có lịch dọn tự động và chưa có bản macOS/Linux (mã Rust có phần Windows-only: UAC,
-  registry, UserAssist, single-instance qua Win32).
-
-## Giấy phép
-
-MIT (xem `LICENSE`). Dùng, sửa, phân phối lại tuỳ ý, kể cả trong môi trường thương mại, chỉ
-cần giữ dòng bản quyền.
-
-## Cấu trúc
-
-```
+```text
 src-tauri/src/
-  lib.rs              lệnh Tauri + event stream (catalog/artifact/clean/big/dup/startup progress)
-  catalog.rs          kiểu CatalogEntry (đa đường dẫn, nhãn 2 ngôn ngữ), Roots từ biến môi trường, dedupe
-  catalog_specs.rs    bảng mục tĩnh (~95 vị trí đã biết)
-  catalog_dynamic.rs  mục sinh theo máy: profile trình duyệt, app Electron, họ VS Code, JetBrains, Steam, Store, temp ở gốc ổ
-  project_roots.rs    gốc quét artifact: mọi ổ + home, danh sách chặn, thêm/loại trừ từ cài đặt
-  artifacts.rs        tìm node_modules/target/build… theo dấu hiệu dự án bên cạnh
-  sizer.rs            đo dung lượng bằng read_dir (không stat thêm từng file), báo tiến trình
-  cleaner.rs          xoá thẳng hoặc qua Thùng rác + danh sách đường dẫn bảo vệ
-  settings.rs         settings.json (ngôn ngữ, thư mục thêm/loại trừ, chế độ Thùng rác)
-  recycle_bin.rs      Thùng rác qua SHQueryRecycleBin/SHEmptyRecycleBin: một lời gọi, không liệt kê từng mục
-  registry.rs         đọc/xoá registry qua advapi32 (mở khoá, liệt kê, chuỗi/số/nhị phân, giờ ghi cuối, xoá nhánh)
-  installed_apps.rs   app desktop từ ba nhánh Uninstall; tách lệnh gỡ, ngày cài, mục "chết", chạy trình gỡ, xoá khoá
-  store_apps.rs       app Store của user (AppModel Repository), dịch tên ms-resource, Remove-AppxPackage
-  user_assist.rs      lần mở cuối từ UserAssist (ROT13, GUID thư mục chuẩn, bản ghi 72 byte), cả khoá exe lẫn .lnk
-  shortcuts.rs        đọc .lnk (MS-SHLLINK): đích + AppUserModelID; chỉ mục Start Menu/Taskbar/Desktop để nối ID ↔ exe
-  apps.rs             gộp desktop + Store thành AppInfo (lần mở, đang chạy, thư mục), gỡ app, xoá mục chết
-  leftovers.rs        thư mục không app nào nhận: chủ sở hữu (thư mục cài, từ khoá tên/hãng), danh sách không bao giờ nêu
-  big_files.rs        một lượt đi cây trả cả danh sách file ≥ ngưỡng và bản đồ dung lượng theo thư mục; file Windows tự quản bị khoá
-  duplicates.rs       nhóm file giống hệt từng byte: cỡ → 4 KB đầu → SHA-256 toàn file; bỏ vùng mà trùng là đúng thiết kế
-  startup.rs          mục Run/thư mục Startup/scheduled task; bật tắt qua cờ StartupApproved và schtasks
-  history.rs          mốc dung lượng sau mỗi lần quét (history.json, giữ 60 mốc, gộp trong một giờ) + so hai mốc
-  elevation.rs        kiểm tra elevated + mở lại qua UAC
-  single_instance.rs  một bản chạy mỗi lần; --after-pid khi chuyển sang admin
-  drives.rs           ổ đĩa cố định qua sysinfo
-  parallel.rs         pool thread cố định dùng chung cho các pha quét
+  lib.rs              Tauri IPC commands + live progress event streams
+  catalog.rs          Bilingual CatalogEntry model, environment-variable root resolution, deduplication
+  catalog_specs.rs    Static catalog specifications (~95 known cache locations)
+  catalog_dynamic.rs  Dynamic per-machine discovery (browser profiles, Electron, VS Code forks, JetBrains, Steam, Store)
+  project_roots.rs    Fixed-drive + user-folder walk with system exclusions and custom Settings roots
+  artifacts.rs        Project-marker-verified build artifact detection (node_modules, target, build, .venv, etc.)
+  sizer.rs            Parallel directory size measurement via read_dir metadata without redundant stat calls
+  cleaner.rs          Recycle Bin / direct deletion engine + protected system path allow/deny guards
+  installed_apps.rs   Win32 Uninstall hive reader, dead-entry detector, vendor uninstaller runner
+  store_apps.rs       Current-user AppX package reader + SHLoadIndirectString resource localization
+  user_assist.rs      HKCU UserAssist ROT13 + Known Folder GUID launch-timestamp decoder
+  shortcuts.rs        Binary MS-SHLLINK (.lnk) parser mapping AppUserModelID and targets without COM
+  leftovers.rs        Orphaned AppData / ProgramData / Program Files detector with active-process checks
+  big_files.rs        Single-pass large file finder + 3-level folder usage map + Windows-managed file locks
+  duplicates.rs       3-stage byte-identical duplicate finder (size -> 4 KB prefix -> streaming SHA-256)
+  startup.rs          Run keys, Startup folders, and Scheduled Tasks with StartupApproved toggle support
+  history.rs          60-snapshot scan journal (history.json) and two-snapshot delta calculator
 ui/
-  index.html                      bố cục (rail trái, thanh bảy tab, các pane, hộp cài đặt/xác nhận/hỏi)
-  js/i18n-strings.js              chuỗi vi/en, t(), L(), applyI18n()
-  js/format-bytes-and-dates.js    định dạng dung lượng và mốc thời gian dùng chung
-  js/ledger-view-and-rows.js      tạo hàng, hai cách xem, bộ lọc, tìm kiếm, tính tổng (cả mục thư mục thừa)
-  js/tabs-and-ask-dialog.js       chuyển tab (nhớ tab), huy hiệu, hộp hỏi chung ask(), lớp bận
-  js/apps-tab.js                  tab Ứng dụng: sắp/lọc/tìm, đo dần, gỡ, xoá mục chết (một hoặc tất cả)
-  js/leftovers-tab.js             tab Thư mục thừa: quét lười, lọc theo vùng, chọn hết
-  js/files-tab.js                 tab File lớn: ngưỡng, danh sách file và bản đồ thư mục, mục bị khoá
-  js/duplicates-tab.js            tab File trùng: nhóm gập/mở, nhãn cũ nhất/mới nhất, cảnh báo tick cả nhóm
-  js/startup-tab.js               tab Khởi động: bật/tắt, xoá mục hỏng, lọc theo trạng thái
-  js/history-tab.js               tab Nhật ký: chọn mốc, so sánh, lọc phình/nhỏ/mới
-  js/settings-dialog.js           hộp cài đặt, chọn thư mục qua dialog hệ thống
-  js/slclean-app.js               quét, dọn, ổ đĩa, ngôn ngữ, sự kiện, ghi mốc nhật ký
-  css/                            theo vùng giao diện; fonts.css sinh bởi scripts/fetch-google-fonts-offline.mjs
-design/app-icon.html              nguồn icon (SVG); render → design/app-icon.png → `npx tauri icon`
-```
-
-Script kiểm thử và phát hành, tất cả chạy trên **app thật** mở qua cổng DevTools:
-
-```
+  index.html          7-tab single-window layout, left rail, Settings and confirmation dialogs
+  js/                 Modular vanilla JS tabs, bilingual i18n dictionary (ui/js/i18n-strings.js), Tauri IPC bindings
 scripts/
-  verify-ui-in-headless-chrome.mjs     UI với cầu nối __TAURI__ giả (i18n, tìm kiếm, cài đặt, dọn)
-  launch-app-with-devtools-port.ps1    mở app thật với cổng DevTools
-  drive-real-app-via-devtools.mjs      đọc số liệu thật từ DOM app đang chạy + chụp ảnh
-  probe-real-app-settings-commands.mjs kiểm tra roundtrip settings trên app thật
-  make-throwaway-artifact-fixture.ps1  dự án giả 3 MB trong D:\tmp
-  make-throwaway-app-fixtures.ps1      mục Uninstall giả (một chết, một gỡ được) + thư mục mồ côi; -Remove để dọn
-  make-throwaway-startup-fixture.ps1   mục Run/Startup giả (một hỏng) để thử bật/tắt/xoá
-  e2e-delete-fixture-in-real-app.mjs   xoá thật fixture qua hộp xác nhận của app
-  e2e-trash-mode-roundtrip-in-real-app.mjs  dọn fixture có/không tick Thùng rác, đếm Thùng rác từ shell Windows
-  e2e-empty-recycle-bin-in-real-app.mjs     dọn Thùng rác từ app, kiểm tra cửa sổ còn trả lời
-  measure-recycle-bin-command-in-real-app.mjs  đo lệnh Thùng rác trên app thật
-  e2e-apps-and-leftovers-in-real-app.mjs    xoá mục chết, gỡ app giả, dọn thư mục sót; soi registry/đĩa sau mỗi bước
-  e2e-large-files-in-real-app.mjs      quét file lớn, đổi ngưỡng, đổi cách xem, xoá một file fixture
-  e2e-duplicates-in-real-app.mjs       tạo bản trùng thật, kiểm tra nhóm và cảnh báo tick cả nhóm
-  e2e-startup-in-real-app.mjs          bật/tắt mục khởi động thật rồi soi cờ StartupApproved trong registry
-  e2e-history-in-real-app.mjs          ghi hai mốc rồi kiểm tra bảng so sánh
-  shoot-all-tabs-in-real-app.mjs       chụp mọi ảnh README trên app thật (bảy tab vi, tab Dọn dẹp en, hộp cài đặt)
-  switch-real-app-language-and-capture.mjs  đổi ngôn ngữ trên app thật rồi chụp
-  capture-running-app-window.ps1       chụp đúng cửa sổ app (không qua DevTools)
-  make-release-bundles.ps1             build ra ổ khác, gom bộ cài + portable + SHA256SUMS vào release\
+  verify-ui-in-headless-chrome.mjs   Automated UI & i18n test suite against a mocked __TAURI__ bridge
+  e2e-*.mjs                          End-to-end tests driving the real Windows binary via WebView2 DevTools
 ```
 
-Test Rust: `cargo test --manifest-path src-tauri\Cargo.toml` — 74 test chạy mặc định (bảo vệ
-đường dẫn, xoá file bị khoá, mục nhiều thư mục, đo song song, phân loại artifact, loại trừ,
-dedupe danh mục, phân loại thư mục tạm, quyền admin, Thùng rác, registry, UserAssist, .lnk
-(đích, AUMID, thư mục làm việc), tách lệnh gỡ, ngày cài, app Store, chủ sở hữu thư mục, nhận
-diện thành phần hệ thống, ngưỡng/bản đồ file lớn, ba pha lọc file trùng, cờ StartupApproved,
-gộp và cắt mốc nhật ký) và 7 test `--ignored` in ra dữ liệu của máy hiện tại để soi bằng mắt
-(danh sách app, thư mục thừa, shortcut đọc được, mục khởi động). Test UI:
-`node scripts/verify-ui-in-headless-chrome.mjs` (cần Chrome cài sẵn và `playwright-core` từ
-`npm install`).
+Run the automated test suites:
+
+```bat
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run verify:ui
+```
+
+`cargo test` runs 74 unit tests by default covering path protection guards, locked-file skipping, parallel sizing, artifact project markers, deduplication, `UserAssist` decoding, `.lnk` binary parsing, system component classification, large-file maps, 3-stage duplicate hashing, `StartupApproved` registry flags, and history snapshot pruning (plus 7 `--ignored` live inspection tests).
+
+## Known Limitations
+
+- **Last-opened accuracy:** Windows `UserAssist` tracks launches through Explorer, Start Menu, and Taskbar; tools launched exclusively from a terminal or background service may show `never` or `unknown`.
+- **Leftover heuristics:** Orphaned folder detection matches normalized folder names against installed apps, publishers, and launch history. Portable apps stored in custom-named folders may appear with a `has exe` badge, so review unfamiliar entries in Explorer before deleting.
+- **Non-MFT filesystem walk:** **Large Files** and **Duplicates** walk standard directory APIs so they require no administrator rights and support non-NTFS/external drives, trading raw NTFS MFT scan speed for broader compatibility and zero elevation.
+- **Platform:** Windows 10/11 x64 only (relies directly on Win32 Registry, `UserAssist`, UAC elevation, Shell Recycle Bin APIs, and Win32 single-instance mutexes).
+
+## License
+
+MIT License. See [`LICENSE`](LICENSE) for full text.
