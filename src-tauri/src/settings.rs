@@ -29,6 +29,16 @@ pub fn load(app: &AppHandle) -> Settings {
         .unwrap_or_default()
 }
 
+/// Đọc cấu hình trực tiếp từ `%APPDATA%\vn.salyyy.slclean\settings.json` khi chạy chế độ CLI
+/// không khởi tạo `AppHandle` của Tauri.
+pub fn load_offline() -> Settings {
+    dirs::config_dir()
+        .map(|d| d.join("vn.salyyy.slclean").join("settings.json"))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let path = file(app).ok_or("Không tìm được thư mục cấu hình.")?;
     if let Some(dir) = path.parent() {

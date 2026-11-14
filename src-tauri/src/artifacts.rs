@@ -34,6 +34,9 @@ const ALWAYS: &[(&str, &str)] = &[
     (".turbo", "Turborepo"),
     (".parcel-cache", "Parcel"),
     (".svelte-kit", "SvelteKit"),
+    (".astro", "Astro"),
+    (".wrangler", "Cloudflare Wrangler"),
+    (".vercel", "Vercel"),
     (".angular", "Angular"),
     (".vite", "Vite"),
     (".mypy_cache", "mypy"),
@@ -74,6 +77,8 @@ fn classify(name: &str, parent: &Path, path: &Path) -> Option<&'static str> {
         ".venv" | "venv" | "env" if path.join("pyvenv.cfg").is_file() => Some("Python venv"),
         "Library" | "Temp" if parent.join("Assets").is_dir() && parent.join("ProjectSettings").is_dir() => Some("Unity"),
         "run" if has_any(parent, &["build.gradle.kts", "build.gradle"]) && path.join("eula.txt").exists() => Some("Minecraft test server (run-paper)"),
+        ".terraform" if has_ext(parent, "tf") => Some("Terraform"),
+        ".zig-cache" | "zig-cache" | "zig-out" if has_any(parent, &["build.zig"]) => Some("Zig"),
         n if n.starts_with("cmake-build-") && has_any(parent, &["CMakeLists.txt"]) => Some("CMake (CLion)"),
         _ => None,
     }
@@ -82,7 +87,7 @@ fn classify(name: &str, parent: &Path, path: &Path) -> Option<&'static str> {
 fn is_artifact_name(name: &str) -> bool {
     name == "node_modules"
         || ALWAYS.iter().any(|(n, _)| *n == name)
-        || matches!(name, "target" | "build" | "out" | "dist" | "bin" | "obj" | ".venv" | "venv" | "env" | "run" | "Library" | "Temp")
+        || matches!(name, "target" | "build" | "out" | "dist" | "bin" | "obj" | ".venv" | "venv" | "env" | "run" | "Library" | "Temp" | ".terraform" | ".zig-cache" | "zig-cache" | "zig-out")
         || name.starts_with("cmake-build-")
 }
 

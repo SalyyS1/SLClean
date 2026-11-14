@@ -1,0 +1,80 @@
+name: CI & Windows Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Validate UI JavaScript syntax & i18n parity
+        shell: pwsh
+        run: |
+          Get-ChildItem ui/js/*.js | ForEach-Object { node --check $_.FullName }
+          node -e '
+            const fs = require("fs");
+            const vm = require("vm");
+            const ctx = {};
+            vm.createContext(ctx);
+            vm.runInContext(fs.readFileSync("ui/js/i18n-strings.js", "utf8") + "; this.S = STRINGS;", ctx);
+            const vi = Object.keys(ctx.S.vi).sort();
+            const en = Object.keys(ctx.S.en).sort();
+            const missingEn = vi.filter(k => !ctx.S.en[k]);
+            const missingVi = en.filter(k => !ctx.S.vi[k]);
+            if (missingEn.length || missingVi.length) {
+              console.error({ missingEn, missingVi });
+              process.exit(1);
+            }
+            console.log(`Verified ${vi.length} bilingual UI string keys.`);
+          '
+
+      - name: Run Rust unit tests on Windows
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Package Windows NSIS installer & portable binary (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/make-release-bundles.ps1 -Out "$env:RUNNER_TEMP\slclean-release-out"
+          & "$env:RUNNER_TEMP\slclean-release-out\release\slclean.exe" --version
+          & "$env:RUNNER_TEMP\slclean-release-out\release\slclean.exe" --list-specs --out "$env:RUNNER_TEMP\specs.json"
+          $specs = Get-Content "$env:RUNNER_TEMP\specs.json" -Raw | ConvertFrom-Json
+          Write-Host "Smoke-tested CLI --list-specs ($($specs.Count) static rules)"
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/SLClean_*_x64-setup.exe
+            release/SLClean-portable.exe
+            release/SHA256SUMS.txt
+          generate_release_notes: true

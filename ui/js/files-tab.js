@@ -17,14 +17,18 @@ function bigFilePasses(it) {
   return [it.label, it.path].some((s) => String(s).toLowerCase().includes(bigQuery));
 }
 
-/** File từ backend → mục sổ cái. File hệ thống bị khoá tick nhưng vẫn hiện. */
+/** File từ backend → mục sổ cái. File hệ thống và ổ đĩa ảo WSL/Docker bị khoá tick nhưng vẫn hiện. */
 function bigFileItem(f) {
   const name = String(f.path).split("\\").filter(Boolean).slice(-1)[0] || f.path;
   const extraTags = [];
   if (f.ext) extraTags.push(`<b class="tag tag--src">${esc(f.ext)}</b>`);
-  if (f.locked) extraTags.push(`<b class="tag tag--component" title="${esc(t("big.lockedTitle"))}">${t("big.locked")}</b>`);
+  const isVhdx = f.lock_kind === "vhdx";
+  if (f.locked) {
+    extraTags.push(`<b class="tag tag--component" title="${esc(t(isVhdx ? "big.vhdxTitle" : "big.lockedTitle"))}">${t(isVhdx ? "big.vhdx" : "big.locked")}</b>`);
+  }
+  const note = f.locked ? t(isVhdx ? "big.vhdxNote" : "big.lockedNote") : "";
   return {
-    id: `big:${f.path}`, group: "bigfile", label: name, note: f.locked ? t("big.lockedNote") : "", path: f.path, paths: [f.path],
+    id: `big:${f.path}`, group: "bigfile", label: name, note, path: f.path, paths: [f.path],
     bytes: f.bytes, files: 1, safety: "review", keepRoot: false, needsAdmin: false, locked: f.locked,
     checked: false, gone: false, partial: false, age: f.modified, measuring: false, extraTags,
   };

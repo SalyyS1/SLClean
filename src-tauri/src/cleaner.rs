@@ -89,7 +89,7 @@ fn guard_lists() -> (Vec<String>, Vec<String>) {
 /// (.cargo, .gradle, .claude…), app đã cài (Local\Programs, WindowsApps). Tất cả suy từ biến
 /// môi trường, không ghi cứng theo máy.
 pub(crate) fn is_protected(path: &Path) -> bool {
-    if is_root_like(path) {
+    if is_root_like(path) || crate::big_files::is_managed_vhdx(path) {
         return true;
     }
     let target = lower(path);
@@ -327,6 +327,8 @@ mod tests {
         assert!(!is_protected(&home.join("AppData\\Local\\Temp")));
         assert!(!is_protected(&home.join(".cargo\\registry\\cache")));
         assert!(!is_protected(Path::new(r"D:\Project\x\node_modules")));
+        assert!(is_protected(Path::new(r"D:\WSL\Ubuntu\ext4.vhdx")));
+        assert!(is_protected(Path::new(r"C:\Users\x\AppData\Local\Docker\wsl\disk\docker_data.vhdx")));
         let res = clean_one(&item(vec![home.clone()], true), false);
         assert_eq!(res.removed, 0);
         assert_eq!(res.error.as_deref(), Some("protected"));

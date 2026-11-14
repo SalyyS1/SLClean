@@ -39,8 +39,11 @@ pub struct BigFile {
     pub modified: u64,
     /// Đuôi file chữ thường, không có dấu chấm; rỗng nếu không có.
     pub ext: String,
-    /// File Windows tự quản: hiện để giải thích, không cho tick xoá.
+    /// File Windows / WSL / Docker tự quản: hiện để giải thích, không cho tick xoá.
     pub locked: bool,
+    /// Loại khoá ("system" | "vhdx") để UI hiện đúng hướng dẫn thu gọn thay vì xoá tay.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_kind: Option<String>,
 }
 
 /// Một thư mục trong bản đồ. `bytes` là tổng của cả cây con, kể cả phần sâu hơn `MAP_DEPTH`.
@@ -65,6 +68,33 @@ pub struct BigScan {
 fn is_system_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     SYSTEM_FILES.contains(&lower.as_str())
+}
+
+/// Ổ đĩa ảo của WSL2 hoặc Docker Desktop (`ext4.vhdx`, `docker_data.vhdx`, `swap.vhdx`…).
+/// Xoá thẳng file này sẽ mất trắng cả bản phân phối Linux hoặc volume Docker, nên phải khoá
+/// cả ở UI lẫn `cleaner::is_protected` và hướng dẫn người dùng thu gọn (compact) an toàn.
+pub fn is_managed_vhdx(path: &Path) -> bool {
+    if !ext_of(path).eq_ignore_ascii_case("vhdx") {
+        return false;
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    if matches!(name.as_str(), "ext4.vhdx" | "docker_data.vhdx" | "swap.vhdx") {
+        return true;
+    }
+    let norm = path.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    norm.contains("\\docker\\wsl\\")
+        || norm.contains("\\appdata\\local\\wsl\\")
+        || (norm.contains("\\appdata\\local\\packages\\") && norm.contains("\\localstate\\"))
+}
+
+fn classify_lock(name: &str, path: &Path) -> Option<String> {
+    if is_system_file(name) {
+        Some("system".into())
+    } else if is_managed_vhdx(path) {
+        Some("vhdx".into())
+    } else {
+        None
+    }
 }
 
 fn skip_at_drive_root(name: &str) -> bool {
@@ -155,7 +185,8 @@ fn walk_root(root: &Path, threshold: u64, excluded: &[PathBuf], cancel: &AtomicB
             }
 
             if bytes >= threshold {
-                let f = BigFile { bytes, modified: modified_epoch(&m), ext: ext_of(&path), locked: is_system_file(&name), path };
+                let lock_kind = classify_lock(&name, &path);
+                let f = BigFile { bytes, modified: modified_epoch(&m), ext: ext_of(&path), locked: lock_kind.is_some(), lock_kind, path };
                 on_file(&f);
                 out.files.push(f);
             }
@@ -279,6 +310,10 @@ mod tests {
     fn windows_managed_files_are_locked_and_system_dirs_skipped() {
         assert!(is_system_file("pagefile.sys") && is_system_file("HIBERFIL.SYS") && is_system_file("swapfile.sys"));
         assert!(!is_system_file("mymovie.mkv"));
+        assert!(is_managed_vhdx(Path::new(r"C:\Users\x\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu_79rhkp\LocalState\ext4.vhdx")));
+        assert!(is_managed_vhdx(Path::new(r"C:\Users\x\AppData\Local\Docker\wsl\disk\docker_data.vhdx")));
+        assert!(is_managed_vhdx(Path::new(r"D:\WSL\Ubuntu24\ext4.vhdx")));
+        assert!(!is_managed_vhdx(Path::new(r"C:\Users\x\Downloads\WinServer2025_Eval.vhdx")));
         assert!(skip_at_drive_root("Windows") && skip_at_drive_root("$Recycle.Bin") && skip_at_drive_root("System Volume Information"));
         // Chỗ chứa file lớn thật sự phải đi vào được, khác hẳn danh sách chặn của tab artifact.
         assert!(!skip_at_drive_root("Program Files") && !skip_at_drive_root("Users") && !skip_at_drive_root("Games"));

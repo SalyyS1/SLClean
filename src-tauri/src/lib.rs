@@ -9,6 +9,7 @@ mod catalog;
 mod catalog_dynamic;
 mod catalog_specs;
 mod cleaner;
+mod cli;
 mod drives;
 mod duplicates;
 mod elevation;
@@ -430,6 +431,9 @@ async fn pick_folder(app: AppHandle, title: String) -> Result<Option<PathBuf>, S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Some(code) = cli::try_run_from_env() {
+        std::process::exit(code);
+    }
     // Bản được mở lại với quyền admin phải chờ bản cũ thoát; nếu vẫn còn bản khác thì
     // đưa cửa sổ của nó ra trước và thoát, thay vì hiện thêm một cửa sổ không có webview.
     if let Some(pid) = single_instance::after_pid_arg() {

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SLClean - Windows AI &amp; Developer Cache Explorer</title>
+  <meta name="description" content="Interactive rule explorer and cache footprint estimator for SLClean, a local-first Windows disk inspector and AI/developer cache cleaner built in Rust and Tauri 2." />
+  <style>
+    :root {
+      --bg: #0f1411;
+      --panel: #161d19;
+      --panel-alt: #1c2520;
+      --border: #2a3730;
+      --text: #e6efe9;
+      --muted: #93a89b;
+      --accent: #4ade80;
+      --accent-dim: rgba(74, 222, 128, 0.14);
+      --rebuild: #38bdf8;
+      --rebuild-dim: rgba(56, 189, 248, 0.14);
+      --review: #fbbf24;
+      --review-dim: rgba(251, 191, 36, 0.14);
+      --lock: #f87171;
+      --lock-dim: rgba(248, 113, 113, 0.14);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 20px 72px;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 28px;
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 40px);
+      letter-spacing: -0.02em;
+    }
+    .lead {
+      margin: 0 0 20px;
+      color: var(--muted);
+      max-width: 780px;
+      font-size: 16px;
+    }
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--panel);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #09140d;
+      border-color: var(--accent);
+    }
+    .grid-top {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .stat-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 26px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .estimator {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .estimator h2, .explorer h2 {
+      margin: 0 0 6px;
+      font-size: 19px;
+    }
+    .sub {
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .chip {
+      cursor: pointer;
+      user-select: none;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      color: var(--muted);
+      transition: 0.15s ease;
+    }
+    .chip.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--text);
+    }
+    .est-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    input[type="search"], select {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 14px;
+    }
+    input[type="search"] {
+      flex: 1;
+      min-width: 220px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13.5px;
+    }
+    th, td {
+      text-align: left;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel-alt);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    code {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #c5d8cc;
+    }
+    .badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .b-safe { background: var(--accent-dim); color: var(--accent); }
+    .b-rebuild { background: var(--rebuild-dim); color: var(--rebuild); }
+    .b-review { background: var(--review-dim); color: var(--review); }
+    .b-locked { background: var(--lock-dim); color: var(--lock); }
+    .cli-box {
+      margin-top: 28px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    pre {
+      margin: 10px 0 0;
+      padding: 14px;
+      background: #0a0e0c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: #d4e5da;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="eyebrow">SLClean v0.4.0 | Rust + Tauri 2 | Zero Telemetry</span>
+      <h1>Windows AI &amp; Developer Cache Footprint Explorer</h1>
+      <p class="lead">
+        Inspect every cache rule, project artifact marker, and path-protection guard built into SLClean before installing. Toggle your active Windows toolchains below to estimate typical reclaimable disk bloat.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/SalyyS1/SLClean/releases/latest">Download Windows Installer &amp; Portable .exe</a>
+        <a class="btn" href="https://github.com/SalyyS1/SLClean">View Source on GitHub</a>
+      </div>
+    </header>
+
+    <section class="grid-top">
+      <div class="stat-card">
+        <div class="stat-label">Detection Rules</div>
+        <div class="stat-value">105+</div>
+        <div class="stat-sub">Static specs + dynamic browser/IDE discovery</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Estimated Reclaimable</div>
+        <div class="stat-value" id="est-total">0.0 GB</div>
+        <div class="stat-sub" id="est-breakdown">Select your stacks below</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">VHDX &amp; OS Guards</div>
+        <div class="stat-value">Locked</div>
+        <div class="stat-sub">Protects WSL2 ext4.vhdx, Docker, .ssh, pagefile</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Headless CLI</div>
+        <div class="stat-value">--scan-json</div>
+        <div class="stat-sub">Read-only JSON audits &amp; --clean-safe --dry-run</div>
+      </div>
+    </section>
+
+    <section class="estimator">
+      <h2>1. Interactive Workstation Bloat Estimator</h2>
+      <p class="sub">Click the tools installed on your Windows workstation to see typical accumulated cache and build-artifact footprints.</p>
+      <div class="chips" id="stack-chips"></div>
+      <div class="est-bar">
+        <span id="est-safe">Safe caches: 0.0 GB</span>
+        <span id="est-rebuild">Rebuildable caches &amp; artifacts: 0.0 GB</span>
+        <span id="est-review">Review-only history: 0.0 GB</span>
+      </div>
+    </section>
+
+    <section class="explorer">
+      <h2>2. Detection &amp; Protection Rule Catalog</h2>
+      <p class="sub">Every location is resolved dynamically from environment variables (%LOCALAPPDATA%, %APPDATA%, CARGO_HOME, GRADLE_USER_HOME, HF_HOME). Nothing is deleted automatically.</p>
+      <div class="toolbar">
+        <input type="search" id="rule-search" placeholder="Filter rules by tool, path, or category (e.g. cursor, huggingface, gradle, vhdx)..." />
+        <select id="rule-group">
+          <option value="all">All Categories</option>
+          <option value="ai">AI &amp; LLM Tooling</option>
+          <option value="package">Package Managers &amp; Compilers</option>
+          <option value="editor">IDEs &amp; Code Editors</option>
+          <option value="browser">Web Browsers (Per-Profile)</option>
+          <option value="game">Games &amp; Launchers</option>
+          <option value="system">Windows, GPU &amp; Protected VHDX</option>
+          <option value="artifact">Project Build Artifacts</option>
+        </select>
+        <select id="rule-safety">
+          <option value="all">All Safety Tiers</option>
+          <option value="safe">Safe (auto-recreated)</option>
+          <option value="rebuild">Rebuildable (re-downloaded on build)</option>
+          <option value="review">Review (session history / backups)</option>
+          <option value="locked">Locked Guard (never deleted)</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Target</th>
+            <th>Category</th>
+            <th>Safety</th>
+            <th>Resolved Windows Path / Marker</th>
+            <th>Behavior</th>
+          </tr>
+        </thead>
+        <tbody id="rule-rows"></tbody>
+      </table>
+    </section>
+
+    <section class="cli-box">
+      <h2>3. Headless CLI Audit Mode (v0.4.0+)</h2>
+      <p class="sub">Audit workstation cache growth from PowerShell or CI pipelines without opening a GUI window.</p>
+      <pre># Export full cache + project build artifact audit as JSON
+.\SLClean-portable.exe --scan-json --include-artifacts --out disk-audit.json
+
+# Preview exact Safe caches eligible for cleanup (read-only dry-run by default)
+.\SLClean-portable.exe --clean-safe --dry-run
+
+# Inspect all compiled static catalog rules
+.\SLClean-portable.exe --list-specs</pre>
+    </section>
+  </div>
+
+  <script>
+    const STACKS = [
+      { id: "ai-agents", name: "Claude Code / Codex / Gemini CLI", safe: 0.9, rebuild: 0.0, review: 2.8, active: true },
+      { id: "ai-editors", name: "Cursor / Windsurf / VS Code", safe: 2.4, rebuild: 0.0, review: 1.6, active: true },
+      { id: "local-llm", name: "Hugging Face / PyTorch / vLLM / Ollama", safe: 0.6, rebuild: 14.5, review: 8.0, active: false },
+      { id: "rust-cargo", name: "Rust & Cargo Projects", safe: 1.8, rebuild: 11.2, review: 0.0, active: true },
+      { id: "node-web", name: "Node.js / pnpm / Next.js / Playwright", safe: 2.1, rebuild: 6.4, review: 0.0, active: true },
+      { id: "jvm-mc", name: "Gradle / Maven / JetBrains / Minecraft", safe: 1.2, rebuild: 7.8, review: 0.9, active: false },
+      { id: "python-uv", name: "Python / uv / pip / Ruff", safe: 2.7, rebuild: 1.9, review: 0.0, active: true },
+      { id: "browsers", name: "Chrome / Edge / Brave / Firefox", safe: 3.1, rebuild: 0.0, review: 0.0, active: true },
+      { id: "win-gpu", name: "Windows Update & NVIDIA/AMD Shaders", safe: 5.4, rebuild: 0.0, review: 0.0, active: true }
+    ];
+
+    const RULES = [
+      { name: "Claude Code transcripts & rewind", group: "ai", safety: "review", path: "~/.claude/projects, ~/.claude/file-history", note: "Per-project .jsonl transcripts and /rewind snapshots; never pre-selected." },
+      { name: "Claude Code debug, snapshots & paste", group: "ai", safety: "safe", path: "~/.claude/debug, shell-snapshots, paste-cache, %TEMP%\\claude", note: "Transient logs and shell state recreated automatically." },
+      { name: "Codex CLI sessions & logs", group: "ai", safety: "review", path: "~/.codex/sessions, ~/.codex/log", note: "Logs are tagged Safe; session resume transcripts are tagged Review." },
+      { name: "Antigravity & Gemini CLI logs", group: "ai", safety: "safe", path: "~/.gemini/tmp, ~/.gemini/antigravity-cli/logs", note: "Diagnostic logs and CLI temp buffers; auth and settings untouched." },
+      { name: "Cursor / Windsurf / VS Code caches", group: "editor", safety: "safe", path: "%APPDATA%\\<Editor>\\Cache, CachedData, CachedExtensionVSIXs, logs", note: "V8 bytecode cache and installed VSIX archives; workspaceStorage kept in Review." },
+      { name: "Cursor & Windsurf updater installers", group: "ai", safety: "safe", path: "%LOCALAPPDATA%\\cursor-updater, windsurf-updater", note: "Stale background installer binaries left after auto-updates." },
+      { name: "Hugging Face Hub & KaggleHub", group: "ai", safety: "rebuild", path: "$HF_HOME (~/.cache/huggingface), ~/.cache/kagglehub", note: "Downloaded model weights and datasets; re-fetched on demand." },
+      { name: "vLLM, Triton & ONNX Runtime", group: "ai", safety: "rebuild", path: "~/.cache/vllm, ~/.triton/cache, %LOCALAPPDATA%\\ONNXRuntime", note: "Compiled GPU kernels and DirectML execution graph caches." },
+      { name: "Aider, Continue.dev & wandb", group: "ai", safety: "safe", path: "~/.aider/caches, ~/.continue/index, ~/.cache/wandb", note: "Repo-map caches, local vector indexes, and staged W&B media." },
+      { name: "Playwright & Puppeteer browsers", group: "ai", safety: "rebuild", path: "%LOCALAPPDATA%\\ms-playwright, ~/.cache/puppeteer", note: "Headless Chromium/Firefox/WebKit builds; restore via playwright install." },
+      { name: "Cargo registry & target/ artifacts", group: "package", safety: "rebuild", path: "$CARGO_HOME/registry, <project>/target (with Cargo.toml)", note: ".crate tarballs, extracted sources, and marker-verified Rust target directories." },
+      { name: "npm, pnpm, Yarn & Bun caches", group: "package", safety: "safe", path: "%LOCALAPPDATA%\\npm-cache, pnpm-cache, Yarn\\Cache, ~/.bun/install/cache", note: "Package tarballs and metadata; pnpm hard-link store tagged Rebuild." },
+      { name: "uv, pip, Ruff & pre-commit", group: "package", safety: "safe", path: "$UV_CACHE_DIR, $PIP_CACHE_DIR, %LOCALAPPDATA%\\ruff\\cache, ~/.cache/pre-commit", note: "Python wheels, Ruff lint cache, and isolated pre-commit hook envs." },
+      { name: "Gradle caches, daemons & toolchains", group: "package", safety: "rebuild", path: "$GRADLE_USER_HOME/caches, daemon, wrapper/dists, jdks", note: "Daemon logs tagged Safe; shared dependencies and JDKs tagged Rebuild." },
+      { name: "JetBrains IDEs & Zed editor", group: "editor", safety: "rebuild", path: "%LOCALAPPDATA%\\JetBrains\\*, %LOCALAPPDATA%\\Zed\\logs, languages", note: "Local indexes and logs; Roaming IDE settings remain untouched." },
+      { name: "Chromium & Gecko per-profile caches", group: "browser", safety: "safe", path: "Chrome, Edge, Brave, Arc, Opera, Firefox, Zen (Cache, Code Cache, GPUCache, cache2)", note: "Enumerates every browser profile while leaving cookies, logins, and bookmarks untouched." },
+      { name: "Project build artifacts", group: "artifact", safety: "rebuild", path: "node_modules, target, build, dist, .next, .astro, .wrangler, .terraform, .zig-cache, .venv", note: "Requires sibling project manifest (Cargo.toml, package.json, *.tf, build.zig); skips installed apps." },
+      { name: "Steam, Minecraft, Modrinth & Prism", group: "game", safety: "safe", path: "steamapps/shadercache, .minecraft/webcache2, ModrinthApp/meta", note: "Shader caches and launcher downloads; game saves and worlds are never touched." },
+      { name: "Windows Update, WER & GPU Shaders", group: "system", safety: "safe", path: "SoftwareDistribution\\Download, Windows\\Temp, CrashDumps, NVIDIA/AMD DXCache", note: "System items require elevation and lock checkboxes when running standard-user." },
+      { name: "WSL2 & Docker Virtual Disks (VHDX)", group: "system", safety: "locked", path: "ext4.vhdx, docker_data.vhdx, %LOCALAPPDATA%\\Docker\\wsl\\*, %LOCALAPPDATA%\\wsl\\*", note: "Hard-locked in both UI and cleaner.rs with guidance to compact via wsl --shutdown + Optimize-VHD." },
+      { name: "Windows Virtual Memory & SSH Keys", group: "system", safety: "locked", path: "pagefile.sys, hiberfil.sys, swapfile.sys, ~/.ssh, ~/.gnupg, System32", note: "Unconditionally refused by cleaner.rs backend path guard." }
+    ];
+
+    const chipsEl = document.getElementById("stack-chips");
+    function renderEstimator() {
+      chipsEl.innerHTML = "";
+      let safe = 0, rebuild = 0, review = 0;
+      for (const s of STACKS) {
+        if (s.active) { safe += s.safe; rebuild += s.rebuild; review += s.review; }
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chip" + (s.active ? " active" : "");
+        btn.textContent = `${s.name} (~${(s.safe + s.rebuild).toFixed(1)} GB)`;
+        btn.onclick = () => { s.active = !s.active; renderEstimator(); };
+        chipsEl.appendChild(btn);
+      }
+      const reclaim = safe + rebuild;
+      document.getElementById("est-total").textContent = `${reclaim.toFixed(1)} GB`;
+      document.getElementById("est-breakdown").textContent = `${safe.toFixed(1)} GB safe + ${rebuild.toFixed(1)} GB rebuildable`;
+      document.getElementById("est-safe").textContent = `Safe caches: ${safe.toFixed(1)} GB`;
+      document.getElementById("est-rebuild").textContent = `Rebuildable caches & artifacts: ${rebuild.toFixed(1)} GB`;
+      document.getElementById("est-review").textContent = `Review-only history: ${review.toFixed(1)} GB`;
+    }
+
+    function renderRules() {
+      const q = document.getElementById("rule-search").value.trim().toLowerCase();
+      const g = document.getElementById("rule-group").value;
+      const sf = document.getElementById("rule-safety").value;
+      const tbody = document.getElementById("rule-rows");
+      tbody.innerHTML = "";
+      for (const r of RULES) {
+        if (g !== "all" && r.group !== g) continue;
+        if (sf !== "all" && r.safety !== sf) continue;
+        if (q && ![r.name, r.path, r.note, r.group].some(x => x.toLowerCase().includes(q))) continue;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${r.name}</strong></td>
+          <td><code>${r.group}</code></td>
+          <td><span class="badge b-${r.safety}">${r.safety}</span></td>
+          <td><code>${r.path}</code></td>
+          <td>${r.note}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    document.getElementById("rule-search").addEventListener("input", renderRules);
+    document.getElementById("rule-group").addEventListener("change", renderRules);
+    document.getElementById("rule-safety").addEventListener("change", renderRules);
+    renderEstimator();
+    renderRules();
+  </script>
+</body>
+</html>

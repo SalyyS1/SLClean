@@ -60,6 +60,15 @@ const SPECS: &[Spec] = &[
     Spec { id: "chrome-devtools-mcp", group: "ai", label: ("chrome-devtools-mcp — profile", "chrome-devtools-mcp — profile"), note: ("Profile trình duyệt riêng của MCP.", "The MCP server's private browser profile."), safety: Safe, keep_root: false, paths: |r| vec![r.local.join("chrome-devtools-mcp")] },
     Spec { id: "ms-playwright", group: "ai", label: ("Playwright — trình duyệt", "Playwright — browsers"), note: ("Chromium/Firefox/WebKit do Playwright tải. Chạy lại `playwright install` khi cần.", "Chromium/Firefox/WebKit downloaded by Playwright. Run `playwright install` again when needed."), safety: Rebuild, keep_root: false, paths: |r| vec![env_or("PLAYWRIGHT_BROWSERS_PATH", r.local.join("ms-playwright"))] },
     Spec { id: "puppeteer", group: "ai", label: ("Puppeteer — trình duyệt", "Puppeteer — browsers"), note: ("Chromium do Puppeteer tải.", "Chromium downloaded by Puppeteer."), safety: Rebuild, keep_root: false, paths: |r| vec![r.home.join(".cache/puppeteer"), r.local.join("puppeteer")] },
+    Spec { id: "antigravity-logs", group: "ai", label: ("Antigravity / Gemini — logs", "Antigravity / Gemini — logs"), note: ("Log chẩn đoán và crash report của Antigravity / Gemini CLI. Cấu hình và phiên làm việc vẫn giữ.", "Diagnostic logs and crash reports from Antigravity / Gemini CLI. Settings and sessions are untouched."), safety: Safe, keep_root: true, paths: |r| vec![r.home.join(".gemini/antigravity/logs"), r.home.join(".gemini/antigravity-cli/logs")] },
+    Spec { id: "aider-cache", group: "ai", label: ("Aider — repo-map & LLM cache", "Aider — repo-map & LLM cache"), note: ("Cache bản đồ mã nguồn và phản hồi tạm của Aider CLI.", "Cached repository maps and prompt responses from Aider CLI."), safety: Safe, keep_root: true, paths: |r| vec![r.home.join(".aider/caches")] },
+    Spec { id: "continue-index", group: "ai", label: ("Continue.dev — codebase index", "Continue.dev — codebase index"), note: ("Chỉ mục tìm kiếm mã nguồn của Continue; mở lại dự án sẽ lập chỉ mục lại.", "Continue codebase search index; reopening a project re-indexes."), safety: Rebuild, keep_root: true, paths: |r| vec![r.home.join(".continue/index")] },
+    Spec { id: "ai-editor-updaters", group: "ai", label: ("Cursor / Windsurf — bộ cài cập nhật cũ", "Cursor / Windsurf — updater cache"), note: ("Gói cài đặt tự động tải ngầm của Cursor, Windsurf và cpptools sau khi đã nâng cấp.", "Background auto-updater packages cached by Cursor, Windsurf and cpptools."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("cursor-updater"), r.local.join("windsurf-updater"), r.local.join("vscode-cpptools")] },
+    Spec { id: "vllm-triton-cache", group: "ai", label: ("vLLM & Triton — GPU kernel cache", "vLLM & Triton — GPU kernel cache"), note: ("Kernel GPU đã biên dịch của vLLM và OpenAI Triton; chạy lại model sẽ biên dịch lại.", "Compiled GPU kernels from vLLM and OpenAI Triton; running models again recompiles them."), safety: Rebuild, keep_root: true, paths: |r| vec![r.home.join(".cache/vllm"), r.home.join(".triton/cache")] },
+    Spec { id: "onnx-cache", group: "ai", label: ("ONNX Runtime — engine cache", "ONNX Runtime — engine cache"), note: ("Cache đồ thị tối ưu hoá của ONNX Runtime / DirectML.", "Optimized execution graph cache from ONNX Runtime / DirectML."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("ONNXRuntime"), r.home.join(".cache/onnxruntime")] },
+    Spec { id: "wandb-cache", group: "ai", label: ("Weights & Biases — artifact cache", "Weights & Biases — artifact cache"), note: ("Cache artifact và log đồng bộ của wandb.", "Cached training artifacts and media staged by wandb."), safety: Safe, keep_root: true, paths: |r| vec![r.home.join(".cache/wandb"), r.local.join("wandb")] },
+    Spec { id: "kagglehub-cache", group: "ai", label: ("KaggleHub — datasets & models", "KaggleHub — datasets & models"), note: ("Dataset và model đã tải qua kagglehub; tải lại khi cần.", "Datasets and models downloaded via kagglehub; re-downloaded on demand."), safety: Rebuild, keep_root: true, paths: |r| vec![r.home.join(".cache/kagglehub")] },
+    Spec { id: "tiktoken-cache", group: "ai", label: ("tiktoken — BPE vocab cache", "tiktoken — BPE vocab cache"), note: ("File từ vựng tokenizer BPE tải tạm.", "Cached BPE tokenizer vocabulary files."), safety: Safe, keep_root: true, paths: |r| vec![r.temp.join("data-gym-cache")] },
 
     // ---------- Kho gói ----------
     Spec { id: "npm-cache", group: "package", label: ("npm — cache", "npm — cache"), note: ("Cache tarball npm. `npm install` tải lại.", "npm tarball cache. `npm install` re-downloads."), safety: Safe, keep_root: true, paths: |r| vec![env_or("npm_config_cache", r.local.join("npm-cache")), r.roaming.join("npm-cache")] },
@@ -93,6 +102,12 @@ const SPECS: &[Spec] = &[
     Spec { id: "cypress-cache", group: "package", label: ("Cypress — binary cache", "Cypress — binary cache"), note: ("Bản Cypress đã tải.", "Downloaded Cypress binaries."), safety: Rebuild, keep_root: true, paths: |r| vec![r.local.join("Cypress/Cache")] },
     Spec { id: "unity-cache", group: "package", label: ("Unity — cache", "Unity — cache"), note: ("Cache gói và asset của Unity Hub/Editor.", "Unity Hub/Editor package and asset cache."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("Unity/cache")] },
     Spec { id: "unreal-ddc", group: "package", label: ("Unreal — DerivedDataCache", "Unreal — DerivedDataCache"), note: ("Asset đã biên dịch của Unreal; mở lại dự án sẽ build lại.", "Unreal's compiled asset cache; reopening a project rebuilds it."), safety: Rebuild, keep_root: true, paths: |r| vec![r.local.join("UnrealEngine/Common/DerivedDataCache")] },
+    Spec { id: "ruff-global-cache", group: "package", label: ("Ruff — global lint cache", "Ruff — global lint cache"), note: ("Cache phân tích tĩnh toàn cục của Ruff.", "Global lint analysis cache created by Ruff."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("ruff/cache"), r.home.join(".cache/ruff")] },
+    Spec { id: "pre-commit-cache", group: "package", label: ("pre-commit — hook environments", "pre-commit — hook environments"), note: ("Môi trường ảo các git hook của pre-commit; lần commit sau sẽ tạo lại.", "Isolated git-hook environments managed by pre-commit; recreated on next run."), safety: Rebuild, keep_root: true, paths: |r| vec![env_or("PRE_COMMIT_HOME", r.home.join(".cache/pre-commit")), r.local.join("pre-commit")] },
+    Spec { id: "turbo-nx-cache", group: "package", label: ("Turborepo & Nx — local cache", "Turborepo & Nx — local cache"), note: ("Cache task build cục bộ và log daemon của Turborepo / Nx.", "Local task replay cache and daemon logs for Turborepo and Nx."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("turbo"), r.temp.join("nx-daemon")] },
+    Spec { id: "docker-logs", group: "app", label: ("Docker Desktop — logs", "Docker Desktop — logs"), note: ("Log chẩn đoán của Docker Desktop. Image và volume trong WSL/VHDX không bị đụng.", "Docker Desktop diagnostic logs. Container images and volumes are untouched."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("Docker/log")] },
+    Spec { id: "zed-logs", group: "editor", label: ("Zed — logs & crash dumps", "Zed — logs & crash dumps"), note: ("Log phiên và báo cáo sập của trình soạn thảo Zed.", "Session logs and crash dumps from the Zed editor."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("Zed/logs"), r.local.join("Zed/Crashpad")] },
+    Spec { id: "zed-runtimes", group: "editor", label: ("Zed — language servers & Node", "Zed — language servers & Node"), note: ("Language server và Node runtime do Zed tự tải; mở lại file code sẽ tải lại.", "Language servers and Node runtime auto-installed by Zed; reopened projects re-download them."), safety: Rebuild, keep_root: true, paths: |r| vec![r.local.join("Zed/languages"), r.local.join("Zed/node")] },
 
     // ---------- Ứng dụng ----------
     Spec { id: "spotify-storage", group: "app", label: ("Spotify — Storage", "Spotify — Storage"), note: ("Cache nhạc đã phát.", "Cache of streamed music."), safety: Safe, keep_root: true, paths: |r| vec![r.local.join("Spotify/Storage")] },
@@ -133,6 +148,30 @@ const SPECS: &[Spec] = &[
     Spec { id: "package-cache", group: "system", label: ("Package Cache (Visual Studio)", "Package Cache (Visual Studio)"), note: ("Bộ cài Visual Studio/.NET giữ lại để sửa chữa hoặc gỡ. Xoá thì repair/uninstall có thể đòi tải lại.", "Installers kept by Visual Studio/.NET for repair or uninstall. Deleting may make repair/uninstall re-download."), safety: Review, keep_root: true, paths: |r| vec![r.local.join("Package Cache"), r.program_data.join("Package Cache")] },
 ];
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SpecInfo {
+    pub id: &'static str,
+    pub group: &'static str,
+    pub safety: Safety,
+    pub keep_root: bool,
+    pub label: Text,
+    pub note: Text,
+}
+
+pub fn spec_metadata() -> Vec<SpecInfo> {
+    SPECS
+        .iter()
+        .map(|s| SpecInfo {
+            id: s.id,
+            group: s.group,
+            safety: s.safety,
+            keep_root: s.keep_root,
+            label: Text::new(s.label.0, s.label.1),
+            note: Text::new(s.note.0, s.note.1),
+        })
+        .collect()
+}
+
 pub fn entries(r: &Roots) -> Vec<CatalogEntry> {
     SPECS
         .iter()
@@ -142,4 +181,25 @@ pub fn entries(r: &Roots) -> Vec<CatalogEntry> {
             make_entry(r, s.id, s.group, Text::new(s.label.0, s.label.1), Text::new(s.note.0, s.note.1), first, paths, s.safety, s.keep_root)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn all_specs_have_unique_ids_and_bilingual_copy() {
+        let meta = spec_metadata();
+        assert!(meta.len() >= 100, "expected >= 100 static specs, got {}", meta.len());
+        let mut ids = HashSet::new();
+        let valid_groups = ["ai", "package", "editor", "browser", "app", "game", "system", "temp"];
+        for s in &meta {
+            assert!(!s.id.is_empty() && s.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'), "bad id: {}", s.id);
+            assert!(ids.insert(s.id), "duplicate spec id: {}", s.id);
+            assert!(valid_groups.contains(&s.group), "unexpected group {} for {}", s.group, s.id);
+            assert!(!s.label.vi.trim().is_empty() && !s.label.en.trim().is_empty(), "empty label for {}", s.id);
+            assert!(!s.note.vi.trim().is_empty() && !s.note.en.trim().is_empty(), "empty note for {}", s.id);
+        }
+    }
 }

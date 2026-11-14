@@ -2,7 +2,7 @@
 
 **Local-first Windows disk inspector, AI/developer cache cleaner, and system maintenance utility built with Rust and Tauri 2.**
 
-[Tiếng Việt (README.vi.md)](README.vi.md) | [Download Latest Windows Release](https://github.com/SalyyS1/SLClean/releases)
+[Tiếng Việt (README.vi.md)](README.vi.md) | [Download Latest Windows Release](https://github.com/SalyyS1/SLClean/releases) | [Interactive Cache Footprint Explorer](https://salyys1.github.io/SLClean/)
 
 See what actually occupies your Windows drives and reclaim gigabytes without guessing: AI and developer tool caches, project build artifacts, applications you haven't opened in months, orphaned folders left behind by uninstallers, your heaviest single files, byte-identical duplicates, Windows startup entries, and a scan diff journal that shows exactly what grew since your last check.
 
@@ -60,15 +60,15 @@ The hero counter displays total reclaimable space found on the machine, while th
 
 SLClean contains zero hardcoded machine paths. Every location is resolved dynamically from Windows environment variables (`%LOCALAPPDATA%`, `%APPDATA%`, `%TEMP%`, `%SystemRoot%`, `%ProgramData%`) and developer toolchain variables (`CARGO_HOME`, `GRADLE_USER_HOME`, `GOPATH`, `GOCACHE`, `PIP_CACHE_DIR`, `UV_CACHE_DIR`, `PLAYWRIGHT_BROWSERS_PATH`). Non-existent paths are omitted silently.
 
-- **AI & LLM Tooling:** `Claude Code` (session transcripts, file-history, shell snapshots, debug logs, todo lists, paste cache, temp), `Codex CLI` (sessions, logs, archived runs), `Gemini CLI`, `Orca`, `Hugging Face` model/dataset caches, `PyTorch`, `Ollama`, `LM Studio`, `Playwright` browser binaries, `Puppeteer`, and `chrome-devtools-mcp`.
-- **Package Managers & Compilers:** `npm`, `pnpm`, `Yarn`, `Bun`, `Deno`, `pip`, `uv`, `Poetry`, `Cargo` (registry cache/src and git checkouts), `rustup` downloads, `Go` (`GOMODCACHE` and `GOCACHE`), `Gradle` (caches, daemon logs, wrapper distributions, auto-provisioned JDKs), `Maven`, `NuGet`, `Composer`, `Dart/Flutter pub`, `Scoop`, `Android`, `Electron`, `node-gyp`, `Cypress`, `Unity`, and `Unreal Engine DDC`.
-- **IDEs & Code Editors:** Automatically discovers every VS Code family editor via `User\workspaceStorage` (`VS Code`, `VS Code Insiders`, `Cursor`, `Windsurf`, `Trae`, `VSCodium`), covering caches, downloaded VSIX extensions, logs, `workspaceStorage`, and local file history, plus per-product `JetBrains` directories under `%LOCALAPPDATA%\JetBrains`.
+- **AI & LLM Tooling:** `Claude Code` (session transcripts, file-history, shell snapshots, debug logs, todo lists, paste cache, temp), `Codex CLI` (sessions, logs, archived runs), `Antigravity` and `Gemini CLI` (temp and diagnostic logs), `Aider`, `Continue.dev`, `Orca`, `Cursor` and `Windsurf` background updater caches, `Hugging Face` Hub and `KaggleHub` model/dataset caches, `PyTorch`, `vLLM` and `Triton` GPU kernel caches, `ONNX Runtime`, `Weights & Biases`, `tiktoken`, `Ollama`, `LM Studio`, `Playwright` browser binaries, `Puppeteer`, and `chrome-devtools-mcp`.
+- **Package Managers & Compilers:** `npm`, `pnpm`, `Yarn`, `Bun`, `Deno`, `pip`, `uv`, `Poetry`, `Ruff`, `pre-commit`, `Turborepo` / `Nx`, `Cargo` (registry cache/src and git checkouts), `rustup` downloads, `Go` (`GOMODCACHE` and `GOCACHE`), `Gradle` (caches, daemon logs, wrapper distributions, auto-provisioned JDKs), `Maven`, `NuGet`, `Composer`, `Dart/Flutter pub`, `Scoop`, `Android`, `Electron`, `node-gyp`, `Cypress`, `Unity`, and `Unreal Engine DDC`.
+- **IDEs & Code Editors:** Automatically discovers every VS Code family editor via `User\workspaceStorage` (`VS Code`, `VS Code Insiders`, `Cursor`, `Windsurf`, `Trae`, `Kiro`, `VSCodium`, `Positron`, `Void`, `PearAI`), covering caches, downloaded VSIX extensions, logs, `workspaceStorage`, and local file history, plus `Zed` logs/language runtimes and per-product `JetBrains` directories under `%LOCALAPPDATA%\JetBrains`.
 - **Web Browsers (Per-Profile):** Enumerates individual profiles of `Chrome` (Stable, Beta, Canary), `Edge`, `Brave`, `Vivaldi`, `Chromium`, `Arc`, `Coc Coc`, and `Opera` / `Opera GX` using profile names parsed from `Local State` (`Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `Service Worker`), alongside `Firefox`, `Zen`, `Floorp`, `LibreWolf`, and `Waterfox` (`cache2`, `startupCache`, `thumbnails`). Browser logins, saved passwords, cookies, and bookmarks live outside these cache folders and are never touched.
 - **Desktop & Microsoft Store Apps:** Dynamically detects Electron apps storing `Cache` + `Code Cache` under `Roaming` or `Local` (`Discord`, `Claude Desktop`, `Slack`, `Figma`, `Notion`, `Blockbench`, `Termius`), plus `Spotify`, `Telegram`, `Zoom`, `OneDrive` logs, `Adobe` media cache, `Remote Desktop`, and Microsoft Store app caches (`TempState`, `AC\INetCache`).
 - **Games & Launchers:** `Steam` (shader caches across all library folders parsed from `libraryfolders.vdf`, incomplete downloads, web cache), `Minecraft` launcher (webcache, logs, assets/libraries, versions), `Modrinth`, `Prism Launcher`, and `Epic Games`.
 - **Windows & GPU Caches:** User `%TEMP%`, `Windows\Temp`, Windows Update Downloads, Delivery Optimization, CBS logs, Windows Error Reporting (`WER`), CrashDumps, `D3DSCache`, `NVIDIA` / `AMD` / `Intel` GPU shader caches, extracted NVIDIA driver installers, `INetCache`, Explorer thumbnail caches, and Visual Studio `Package Cache`.
 - **Root & Home Temp Folders:** `tmp`, `temp`, `*-temp`, `tmp-*` (tagged `review`), `OneDriveTemp` / `WUDownloadCache` / `DeliveryOptimization` (safe), and `$WinREAgent` / `$WINDOWS.~BT` / `Windows.old` (tagged `review` + `needs admin`).
-- **Project Build Artifacts:** Walks all fixed drives and user folders to locate `node_modules`, `target` (verified beside `Cargo.toml` or `pom.xml`), `build`, `out`, `dist`, `.NET` `bin`/`obj`, `.venv`, `__pycache__`, `.next`, `.nuxt`, `.turbo`, `.gradle`, `.kotlin`, Unity `Library`/`Temp`, `cmake-build-*`, and Paper server test `run` directories. Every match requires a sibling project manifest so folders that merely share a name are never flagged. Node version managers (`nvm`, `fnm`), installed Electron bundles (`resources\app`, `.asar.unpacked`), `msys`, `Program Files`, `Windows`, `Steam`, and `OneDrive` are strictly excluded.
+- **Project Build Artifacts:** Walks all fixed drives and user folders to locate `node_modules`, `target` (verified beside `Cargo.toml` or `pom.xml`), `build`, `out`, `dist`, `.NET` `bin`/`obj`, `.venv`, `__pycache__`, `.next`, `.nuxt`, `.astro`, `.wrangler`, `.vercel`, `.turbo`, `.terraform` (beside `*.tf`), `.zig-cache` / `zig-out` (beside `build.zig`), `.gradle`, `.kotlin`, Unity `Library`/`Temp`, `cmake-build-*`, and Paper server test `run` directories. Every match requires a sibling project manifest so folders that merely share a name are never flagged. Node version managers (`nvm`, `fnm`), installed Electron bundles (`resources\app`, `.asar.unpacked`), `msys`, `Program Files`, `Windows`, `Steam`, and `OneDrive` are strictly excluded.
 
 ---
 
@@ -108,7 +108,7 @@ Cache ledgers measure whole directories, meaning a forgotten 4 GB `.iso` or `.zi
 - **File list:** Every individual file at or above your size threshold (default `100 MB`, adjustable).
 - **By folder:** A three-level directory usage map summing all files (including small ones) so you can trace where disk space went.
 
-Because these are your personal files rather than cache junk, **nothing is pre-selected**. Windows-managed system files (`pagefile.sys`, `hiberfil.sys`, `swapfile.sys`, `dumpstack.log`) are shown so missing gigabytes are accounted for, but their checkboxes are locked with guidance on turning off hibernation or adjusting virtual memory safely through Windows Settings. Because the scanner walks standard filesystem APIs instead of requiring raw NTFS Master File Table elevation, it works without administrator rights and supports external and network drives.
+Because these are your personal files rather than cache junk, **nothing is pre-selected**. Windows-managed system files (`pagefile.sys`, `hiberfil.sys`, `swapfile.sys`, `dumpstack.log`) as well as **WSL2 and Docker virtual disks** (`ext4.vhdx`, `docker_data.vhdx`, `swap.vhdx`) are shown so missing gigabytes are accounted for, while locking their checkboxes (and blocking deletion in `cleaner.rs`) with guidance on compacting sparse VHDX disks safely via `wsl --shutdown` + `Optimize-VHD` or adjusting Windows virtual memory. Because the scanner walks standard filesystem APIs instead of requiring raw NTFS Master File Table elevation, it works without administrator rights and supports external and network drives.
 
 ---
 
@@ -155,6 +155,24 @@ After every completed scan, SLClean saves a compact snapshot recording per-drive
 ### Administrator Mode
 
 Clicking **`Run as administrator`** in the bottom-left corner relaunches SLClean elevated via Windows UAC and hands off cleanly from the non-elevated instance (`--after-pid`). While running as a standard user, system-scoped items (`Windows\Temp`, Windows Update caches, `Windows.old`, `HKLM` dead entries, machine-wide startup items) remain visibly measured with locked checkboxes rather than failing mid-cleanup.
+
+### Headless CLI Audit Mode (v0.4.0+)
+
+SLClean can also run headlessly from PowerShell, Command Prompt, or CI scripts without opening a WebView2 window:
+
+```powershell
+# Export read-only parallel cache + build artifact audit as JSON
+.\SLClean-portable.exe --scan-json --include-artifacts --out disk-audit.json
+
+# Preview Safe caches eligible for cleanup (read-only dry-run by default)
+.\SLClean-portable.exe --clean-safe --dry-run
+
+# Clean only Safe caches (requires explicit --confirm-delete; optional --trash)
+.\SLClean-portable.exe --clean-safe --confirm-delete --trash
+
+# Dump all compiled static detection rules as JSON
+.\SLClean-portable.exe --list-specs
+```
 
 ---
 
