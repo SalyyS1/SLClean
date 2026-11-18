@@ -1,23 +1,33 @@
 //! Kiểm tra và xin quyền admin. Một số mục hệ thống (Windows Update Download,
 //! Windows\Temp, $WinREAgent…) chỉ dọn trọn vẹn được khi tiến trình chạy elevated.
 
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+#[cfg(windows)]
 #[link(name = "shell32")]
 extern "system" {
     fn IsUserAnAdmin() -> i32;
 }
 
+#[cfg(windows)]
 pub fn is_elevated() -> bool {
     unsafe { IsUserAnAdmin() != 0 }
 }
 
+#[cfg(not(windows))]
+pub fn is_elevated() -> bool {
+    std::env::var("USER").map(|u| u == "root").unwrap_or(false)
+}
+
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Mở một bản mới của app qua hộp thoại UAC. Ok = người dùng đồng ý (bản mới đã chạy,
 /// bản này nên thoát); Err = người dùng huỷ, bản hiện tại chạy tiếp bình thường.
 /// Bản mới nhận `--after-pid` để chờ bản này thoát trước khi khởi tạo webview: hai bản
 /// cùng lúc thì bản sau không tạo được WebView2 và chỉ hiện cửa sổ đen.
+#[cfg(windows)]
 pub fn relaunch_elevated() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     // PowerShell nhân đôi nháy đơn bên trong chuỗi nháy đơn.

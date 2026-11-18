@@ -42,8 +42,8 @@ pub fn is_blocked_root_child(name: &str, at_drive_root: bool) -> bool {
 }
 
 pub fn is_under(path: &Path, prefix: &Path) -> bool {
-    let p = lower(path);
-    let pre = lower(prefix);
+    let p = lower(path).replace('/', "\\");
+    let pre = lower(prefix).replace('/', "\\");
     let pre = pre.trim_end_matches('\\');
     p == pre || p.starts_with(&format!("{pre}\\"))
 }

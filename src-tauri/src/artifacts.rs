@@ -95,7 +95,9 @@ fn is_artifact_name(name: &str) -> bool {
 /// hoặc toolchain (msys/mingw). VS Code và Cursor ship sẵn `out`, `dist`, `node_modules` ở đó:
 /// `npm install` không tạo lại được và xoá là hỏng editor, nên không bao giờ coi là artifact.
 fn inside_installed_app(path: &Path) -> bool {
-    let parts: Vec<String> = path.components().map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase()).collect();
+    let s = path.to_string_lossy().replace('\\', "/");
+    let norm = Path::new(&s);
+    let parts: Vec<String> = norm.components().map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase()).collect();
     parts.windows(2).any(|w| w[0] == "resources" && w[1] == "app")
         || parts.iter().any(|p| p.ends_with(".asar.unpacked"))
         || parts.iter().any(|p| matches!(p.as_str(), "msys64" | "msys2" | "cygwin64" | "mingw64" | "mingw32" | "ucrt64" | "clang64" | "program files" | "program files (x86)" | "windowsapps"))

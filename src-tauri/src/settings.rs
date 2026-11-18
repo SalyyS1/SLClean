@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+#[cfg(windows)]
 use tauri::{AppHandle, Manager};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -18,10 +19,12 @@ pub struct Settings {
     pub to_trash: bool,
 }
 
+#[cfg(windows)]
 fn file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("settings.json"))
 }
 
+#[cfg(windows)]
 pub fn load(app: &AppHandle) -> Settings {
     file(app)
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -39,6 +42,7 @@ pub fn load_offline() -> Settings {
         .unwrap_or_default()
 }
 
+#[cfg(windows)]
 pub fn save(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let path = file(app).ok_or("Không tìm được thư mục cấu hình.")?;
     if let Some(dir) = path.parent() {

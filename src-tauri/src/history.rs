@@ -7,7 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::path::PathBuf;
+#[cfg(windows)]
 use tauri::{AppHandle, Manager};
 
 /// Số mốc giữ lại; cũ hơn thì bỏ. Mỗi mốc vài chục KB nên 60 mốc vẫn nhỏ.
@@ -70,11 +72,13 @@ pub struct History {
     pub snapshots: Vec<Snapshot>,
 }
 
+#[cfg(windows)]
 fn file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|d| d.join("history.json"))
 }
 
 /// Thiếu file hoặc file hỏng thì coi như chưa có nhật ký, không báo lỗi.
+#[cfg(windows)]
 pub fn load(app: &AppHandle) -> History {
     file(app)
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -82,6 +86,7 @@ pub fn load(app: &AppHandle) -> History {
         .unwrap_or_default()
 }
 
+#[cfg(windows)]
 pub fn save(app: &AppHandle, history: &History) -> Result<(), String> {
     let path = file(app).ok_or("Không tìm được thư mục cấu hình.")?;
     if let Some(dir) = path.parent() {

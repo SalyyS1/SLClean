@@ -38,7 +38,11 @@ pub const PROGRAM_FILES_KEEP: &[&str] = &[
 ];
 
 fn lower(p: &Path) -> String {
-    p.to_string_lossy().to_ascii_lowercase().trim_end_matches('\\').to_string()
+    p.to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase()
+        .trim_end_matches('\\')
+        .to_string()
 }
 
 /// Hai danh sách đường dẫn (chữ thường) suy từ biến môi trường: `exact` là các gốc chỉ được
@@ -106,7 +110,12 @@ pub(crate) fn is_root_like(path: &Path) -> bool {
         return true;
     }
     // Trên Windows `C:\Windows` có 3 component: tiền tố `C:`, gốc `\`, tên.
-    if path.components().count() <= 3 {
+    // Trên Unix `/usr` có 2 component: gốc `/`, tên.
+    #[cfg(windows)]
+    let max_root_components = 3;
+    #[cfg(not(windows))]
+    let max_root_components = 2;
+    if path.components().count() <= max_root_components {
         return true;
     }
     let target = lower(path);
@@ -288,6 +297,7 @@ mod tests {
         let _ = fs::remove_dir_all(&b);
     }
 
+    #[cfg(windows)]
     #[test]
     fn locked_file_is_skipped_not_fatal() {
         let root = make_tree("locked");
@@ -305,28 +315,32 @@ mod tests {
 
     #[test]
     fn protected_paths_are_refused() {
-        let sr = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
-        let pf = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into());
-        for p in [r"C:\".to_string(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\System32\\drivers"), pf.clone(), format!("{pf}\\Google"), format!("{pf}\\Common Files\\x"), "relative\\path".into()] {
-            assert!(is_protected(Path::new(&p)), "{p}");
+        #[cfg(windows)]
+        {
+            let sr = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+            let pf = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".into());
+            for p in [r"C:\".to_string(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\System32\\drivers"), pf.clone(), format!("{pf}\\Google"), format!("{pf}\\Common Files\\x"), "relative\\path".into()] {
+                assert!(is_protected(Path::new(&p)), "{p}");
+            }
+            // Thư mục app hãng thứ ba trong Program Files phải dọn được (thư mục thừa sau khi gỡ).
+            assert!(!is_protected(Path::new(&format!("{pf}\\Some Vendor App"))));
+            // Thư mục runtime trong Program Files không xoá được nhưng vẫn là thư mục cài để đo.
+            assert!(is_protected(Path::new(&format!("{pf}\\nodejs"))));
+            assert!(!is_root_like(Path::new(&format!("{pf}\\nodejs"))));
+            assert!(!is_root_like(Path::new(&format!("{pf}\\Git"))));
+            for p in [pf.clone(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\Installer\\x"), r"C:\".to_string()] {
+                assert!(is_root_like(Path::new(&p)), "{p}");
+            }
+            assert!(!is_protected(Path::new(r"D:\Project\x\node_modules")));
         }
-        // Thư mục app hãng thứ ba trong Program Files phải dọn được (thư mục thừa sau khi gỡ).
-        assert!(!is_protected(Path::new(&format!("{pf}\\Some Vendor App"))));
-        // Thư mục runtime trong Program Files không xoá được nhưng vẫn là thư mục cài để đo.
-        assert!(is_protected(Path::new(&format!("{pf}\\nodejs"))));
-        assert!(!is_root_like(Path::new(&format!("{pf}\\nodejs"))));
-        assert!(!is_root_like(Path::new(&format!("{pf}\\Git"))));
-        for p in [pf.clone(), sr.clone(), format!("{sr}\\System32"), format!("{sr}\\Installer\\x"), r"C:\".to_string()] {
-            assert!(is_root_like(Path::new(&p)), "{p}");
-        }
+        assert!(is_protected(Path::new("relative/path")));
         let home = dirs::home_dir().unwrap();
         assert!(is_protected(&home));
-        assert!(is_protected(&home.join("AppData\\Local")));
+        assert!(is_protected(&home.join("AppData/Local")));
         assert!(is_protected(&home.join(".cargo")));
-        assert!(is_protected(&home.join(".ssh\\keys")));
-        assert!(!is_protected(&home.join("AppData\\Local\\Temp")));
-        assert!(!is_protected(&home.join(".cargo\\registry\\cache")));
-        assert!(!is_protected(Path::new(r"D:\Project\x\node_modules")));
+        assert!(is_protected(&home.join(".ssh/keys")));
+        assert!(!is_protected(&home.join("AppData/Local/Temp")));
+        assert!(!is_protected(&home.join(".cargo/registry/cache")));
         assert!(is_protected(Path::new(r"D:\WSL\Ubuntu\ext4.vhdx")));
         assert!(is_protected(Path::new(r"C:\Users\x\AppData\Local\Docker\wsl\disk\docker_data.vhdx")));
         let res = clean_one(&item(vec![home.clone()], true), false);

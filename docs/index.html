@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SLClean - Windows AI &amp; Developer Cache Explorer</title>
-  <meta name="description" content="Interactive rule explorer and cache footprint estimator for SLClean, a local-first Windows disk inspector and AI/developer cache cleaner built in Rust and Tauri 2." />
+  <meta name="description" content="Interactive rule explorer, AI cache footprint estimator, and CI disk-budget calculator for SLClean, a local-first Windows disk inspector and AI/developer cache cleaner built in Rust and Tauri 2." />
   <style>
     :root {
       --bg: #0f1411;
@@ -117,14 +117,14 @@
       color: var(--muted);
       margin-top: 4px;
     }
-    .estimator {
+    .estimator, .ai-calculator {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 20px;
       margin-bottom: 28px;
     }
-    .estimator h2, .explorer h2 {
+    .estimator h2, .ai-calculator h2, .explorer h2, .cli-box h2 {
       margin: 0 0 6px;
       font-size: 19px;
     }
@@ -154,6 +154,11 @@
       border-color: var(--accent);
       background: var(--accent-dim);
       color: var(--text);
+    }
+    .chip.active-ai {
+      border-color: var(--rebuild);
+      background: var(--rebuild-dim);
+      color: #bae6fd;
     }
     .est-bar {
       display: flex;
@@ -224,6 +229,8 @@
     .b-rebuild { background: var(--rebuild-dim); color: var(--rebuild); }
     .b-review { background: var(--review-dim); color: var(--review); }
     .b-locked { background: var(--lock-dim); color: var(--lock); }
+    .b-pass { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+    .b-fail { background: var(--lock-dim); color: var(--lock); border: 1px solid var(--lock); }
     .cli-box {
       margin-top: 28px;
       background: var(--panel);
@@ -242,15 +249,60 @@
       font-size: 12.5px;
       color: #d4e5da;
     }
+    .budget-slider-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin: 16px 0 12px;
+      padding: 12px 16px;
+      background: var(--panel-alt);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .budget-slider-row label {
+      font-size: 13.5px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .budget-slider-row input[type="range"] {
+      flex: 1;
+      min-width: 180px;
+      accent-color: var(--accent);
+    }
+    .sim-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .sim-card {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    .sim-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .sim-val {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <span class="eyebrow">SLClean v0.4.0 | Rust + Tauri 2 | Zero Telemetry</span>
+      <span class="eyebrow">SLClean v0.5.0 | Rust + Tauri 2 | Zero Telemetry</span>
       <h1>Windows AI &amp; Developer Cache Footprint Explorer</h1>
       <p class="lead">
-        Inspect every cache rule, project artifact marker, and path-protection guard built into SLClean before installing. Toggle your active Windows toolchains below to estimate typical reclaimable disk bloat.
+        Inspect every cache rule, project artifact marker, duplicate AI weight blob analyzer, and path-protection guard built into SLClean before installing. Toggle your active Windows toolchains below to estimate typical reclaimable disk bloat.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/SalyyS1/SLClean/releases/latest">Download Windows Installer &amp; Portable .exe</a>
@@ -275,14 +327,14 @@
         <div class="stat-sub">Protects WSL2 ext4.vhdx, Docker, .ssh, pagefile</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Headless CLI</div>
-        <div class="stat-value">--scan-json</div>
-        <div class="stat-sub">Read-only JSON audits &amp; --clean-safe --dry-run</div>
+        <div class="stat-label">Headless CLI &amp; CI Gate</div>
+        <div class="stat-value">--scan-dupes</div>
+        <div class="stat-sub">OASIS SARIF v2.1.0 &amp; --max-reclaimable-gb</div>
       </div>
     </section>
 
     <section class="estimator">
-      <h2>1. Interactive Workstation Bloat Estimator</h2>
+      <h2>1. Workstation Developer Bloat Estimator</h2>
       <p class="sub">Click the tools installed on your Windows workstation to see typical accumulated cache and build-artifact footprints.</p>
       <div class="chips" id="stack-chips"></div>
       <div class="est-bar">
@@ -292,11 +344,51 @@
       </div>
     </section>
 
+    <section class="ai-calculator">
+      <h2>2. Interactive AI Cache &amp; Duplicate Weight Blob Calculator (v0.5.0)</h2>
+      <p class="sub">
+        Select active local AI runtimes and weights. SLClean's <code>--scan-dupes</code> command uses a 3-phase pipeline (exact size -> 4 KiB edge sample -> streaming SHA-256) plus zero-read Content-Addressed Storage (CAS) fastpath to surface multi-gigabyte models downloaded multiple times across HuggingFace Hub, Ollama, LM Studio, and ComfyUI without miscounting hardlinks or symlink snapshot trees.
+      </p>
+
+      <div style="margin-bottom: 8px; font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Active Local AI Frameworks &amp; Directories:</div>
+      <div class="chips" id="ai-runtimes"></div>
+
+      <div style="margin-bottom: 8px; font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Installed AI Model Weights &amp; Checkpoints:</div>
+      <div class="chips" id="ai-models"></div>
+
+      <div class="sim-grid">
+        <div class="sim-card">
+          <div class="sim-label">Total AI Blobs Stored</div>
+          <div class="sim-val" id="ai-total-stored" style="color: var(--rebuild);">0.0 GB</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Cross-Ecosystem Duplicate Waste</div>
+          <div class="sim-val" id="ai-dupe-waste" style="color: var(--lock);">0.0 GB</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Hardlinked Shared Savings</div>
+          <div class="sim-val" id="ai-hardlink-saved" style="color: var(--accent);">0.0 GB</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Zero-Read CAS Fastpath Blobs</div>
+          <div class="sim-val" id="ai-cas-blobs" style="color: var(--text);">0 files</div>
+        </div>
+      </div>
+
+      <div class="budget-slider-row">
+        <label for="budget-slider">CI Runner Disk Budget Gate (<code>--max-reclaimable-gb</code>): <strong id="budget-val">10 GB</strong></label>
+        <input type="range" id="budget-slider" min="1" max="50" step="1" value="10" />
+        <span class="badge" id="budget-badge">PASS (exit 0)</span>
+      </div>
+
+      <pre id="cli-cmd-preview">.\SLClean-portable.exe --scan-dupes --trust-cas-names --max-reclaimable-gb 10 --sarif dupes.sarif</pre>
+    </section>
+
     <section class="explorer">
-      <h2>2. Detection &amp; Protection Rule Catalog</h2>
+      <h2>3. Detection &amp; Protection Rule Catalog</h2>
       <p class="sub">Every location is resolved dynamically from environment variables (%LOCALAPPDATA%, %APPDATA%, CARGO_HOME, GRADLE_USER_HOME, HF_HOME). Nothing is deleted automatically.</p>
       <div class="toolbar">
-        <input type="search" id="rule-search" placeholder="Filter rules by tool, path, or category (e.g. cursor, huggingface, gradle, vhdx)..." />
+        <input type="search" id="rule-search" placeholder="Filter rules by tool, path, category, or SARIF rule (e.g. cursor, huggingface, SLC004)..." />
         <select id="rule-group">
           <option value="all">All Categories</option>
           <option value="ai">AI &amp; LLM Tooling</option>
@@ -321,6 +413,7 @@
             <th>Target</th>
             <th>Category</th>
             <th>Safety</th>
+            <th>SARIF Rule</th>
             <th>Resolved Windows Path / Marker</th>
             <th>Behavior</th>
           </tr>
@@ -330,15 +423,21 @@
     </section>
 
     <section class="cli-box">
-      <h2>3. Headless CLI Audit Mode (v0.4.0+)</h2>
-      <p class="sub">Audit workstation cache growth from PowerShell or CI pipelines without opening a GUI window.</p>
-      <pre># Export full cache + project build artifact audit as JSON
-.\SLClean-portable.exe --scan-json --include-artifacts --out disk-audit.json
+      <h2>4. Headless CLI Audit &amp; CI Runner Mode (v0.5.0)</h2>
+      <p class="sub">Audit workstation cache growth, verify duplicate AI model blobs, and gate CI runners without opening a GUI window.</p>
+      <pre># Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath
+.\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
+
+# Export OASIS SARIF v2.1.0 report and fail CI runner (exit code 3) if reclaimable disk bloat exceeds 15 GB
+.\SLClean-portable.exe --scan-json --include-artifacts --max-reclaimable-gb 15 --sarif slclean.sarif
+
+# Enforce budget gate on duplicate AI model weights across custom drive roots
+.\SLClean-portable.exe --scan-dupes --dupes-root D:\Models --dupes-root C:\Users\%USERNAME%\.ollama --max-reclaimable-gb 10 --sarif dupes.sarif
 
 # Preview exact Safe caches eligible for cleanup (read-only dry-run by default)
 .\SLClean-portable.exe --clean-safe --dry-run
 
-# Inspect all compiled static catalog rules
+# Inspect all 105+ compiled static catalog rules as structured JSON
 .\SLClean-portable.exe --list-specs</pre>
     </section>
   </div>
@@ -347,7 +446,7 @@
     const STACKS = [
       { id: "ai-agents", name: "Claude Code / Codex / Gemini CLI", safe: 0.9, rebuild: 0.0, review: 2.8, active: true },
       { id: "ai-editors", name: "Cursor / Windsurf / VS Code", safe: 2.4, rebuild: 0.0, review: 1.6, active: true },
-      { id: "local-llm", name: "Hugging Face / PyTorch / vLLM / Ollama", safe: 0.6, rebuild: 14.5, review: 8.0, active: false },
+      { id: "local-llm", name: "Hugging Face / PyTorch / vLLM / Ollama", safe: 0.6, rebuild: 14.5, review: 8.0, active: true },
       { id: "rust-cargo", name: "Rust & Cargo Projects", safe: 1.8, rebuild: 11.2, review: 0.0, active: true },
       { id: "node-web", name: "Node.js / pnpm / Next.js / Playwright", safe: 2.1, rebuild: 6.4, review: 0.0, active: true },
       { id: "jvm-mc", name: "Gradle / Maven / JetBrains / Minecraft", safe: 1.2, rebuild: 7.8, review: 0.9, active: false },
@@ -356,28 +455,48 @@
       { id: "win-gpu", name: "Windows Update & NVIDIA/AMD Shaders", safe: 5.4, rebuild: 0.0, review: 0.0, active: true }
     ];
 
+    const AI_RUNTIMES = [
+      { id: "hf", name: "HuggingFace Hub (~/.cache/huggingface/hub)", active: true, cas: true },
+      { id: "ollama", name: "Ollama (~/.ollama/models/blobs)", active: true, cas: true },
+      { id: "lmstudio", name: "LM Studio (~/.cache/lm-studio/models)", active: true, cas: false },
+      { id: "comfy", name: "ComfyUI (ComfyUI/models/checkpoints)", active: false, cas: false },
+      { id: "downloads", name: "Downloads folder (~/Downloads/*.gguf)", active: true, cas: false }
+    ];
+
+    const AI_MODELS = [
+      { id: "llama-8b", name: "Llama 3.1 8B Instruct (GGUF Q4_K_M)", sizeGb: 4.92, runtimes: ["hf", "ollama", "lmstudio"], active: true },
+      { id: "deepseek-8b", name: "DeepSeek R1 Distill 8B (GGUF Q4_K_M)", sizeGb: 5.24, runtimes: ["ollama", "downloads"], active: true },
+      { id: "qwen-7b", name: "Qwen 2.5 Coder 7B (GGUF Q4_K_M)", sizeGb: 4.68, runtimes: ["hf", "lmstudio"], active: true },
+      { id: "flux-schnell", name: "FLUX.1 Schnell (safetensors FP8)", sizeGb: 11.90, runtimes: ["hf", "comfy"], active: false },
+      { id: "sdxl-turbo", name: "SDXL Turbo (safetensors FP16)", sizeGb: 6.94, runtimes: ["comfy", "downloads"], active: false },
+      { id: "bge-m3", name: "BGE-M3 Dense Embeddings (safetensors)", sizeGb: 2.24, runtimes: ["hf", "ollama"], active: true },
+      { id: "whisper-v3", name: "Whisper Large v3 (PyTorch pt)", sizeGb: 3.09, runtimes: ["hf"], active: false }
+    ];
+
     const RULES = [
-      { name: "Claude Code transcripts & rewind", group: "ai", safety: "review", path: "~/.claude/projects, ~/.claude/file-history", note: "Per-project .jsonl transcripts and /rewind snapshots; never pre-selected." },
-      { name: "Claude Code debug, snapshots & paste", group: "ai", safety: "safe", path: "~/.claude/debug, shell-snapshots, paste-cache, %TEMP%\\claude", note: "Transient logs and shell state recreated automatically." },
-      { name: "Codex CLI sessions & logs", group: "ai", safety: "review", path: "~/.codex/sessions, ~/.codex/log", note: "Logs are tagged Safe; session resume transcripts are tagged Review." },
-      { name: "Antigravity & Gemini CLI logs", group: "ai", safety: "safe", path: "~/.gemini/tmp, ~/.gemini/antigravity-cli/logs", note: "Diagnostic logs and CLI temp buffers; auth and settings untouched." },
-      { name: "Cursor / Windsurf / VS Code caches", group: "editor", safety: "safe", path: "%APPDATA%\\<Editor>\\Cache, CachedData, CachedExtensionVSIXs, logs", note: "V8 bytecode cache and installed VSIX archives; workspaceStorage kept in Review." },
-      { name: "Cursor & Windsurf updater installers", group: "ai", safety: "safe", path: "%LOCALAPPDATA%\\cursor-updater, windsurf-updater", note: "Stale background installer binaries left after auto-updates." },
-      { name: "Hugging Face Hub & KaggleHub", group: "ai", safety: "rebuild", path: "$HF_HOME (~/.cache/huggingface), ~/.cache/kagglehub", note: "Downloaded model weights and datasets; re-fetched on demand." },
-      { name: "vLLM, Triton & ONNX Runtime", group: "ai", safety: "rebuild", path: "~/.cache/vllm, ~/.triton/cache, %LOCALAPPDATA%\\ONNXRuntime", note: "Compiled GPU kernels and DirectML execution graph caches." },
-      { name: "Aider, Continue.dev & wandb", group: "ai", safety: "safe", path: "~/.aider/caches, ~/.continue/index, ~/.cache/wandb", note: "Repo-map caches, local vector indexes, and staged W&B media." },
-      { name: "Playwright & Puppeteer browsers", group: "ai", safety: "rebuild", path: "%LOCALAPPDATA%\\ms-playwright, ~/.cache/puppeteer", note: "Headless Chromium/Firefox/WebKit builds; restore via playwright install." },
-      { name: "Cargo registry & target/ artifacts", group: "package", safety: "rebuild", path: "$CARGO_HOME/registry, <project>/target (with Cargo.toml)", note: ".crate tarballs, extracted sources, and marker-verified Rust target directories." },
-      { name: "npm, pnpm, Yarn & Bun caches", group: "package", safety: "safe", path: "%LOCALAPPDATA%\\npm-cache, pnpm-cache, Yarn\\Cache, ~/.bun/install/cache", note: "Package tarballs and metadata; pnpm hard-link store tagged Rebuild." },
-      { name: "uv, pip, Ruff & pre-commit", group: "package", safety: "safe", path: "$UV_CACHE_DIR, $PIP_CACHE_DIR, %LOCALAPPDATA%\\ruff\\cache, ~/.cache/pre-commit", note: "Python wheels, Ruff lint cache, and isolated pre-commit hook envs." },
-      { name: "Gradle caches, daemons & toolchains", group: "package", safety: "rebuild", path: "$GRADLE_USER_HOME/caches, daemon, wrapper/dists, jdks", note: "Daemon logs tagged Safe; shared dependencies and JDKs tagged Rebuild." },
-      { name: "JetBrains IDEs & Zed editor", group: "editor", safety: "rebuild", path: "%LOCALAPPDATA%\\JetBrains\\*, %LOCALAPPDATA%\\Zed\\logs, languages", note: "Local indexes and logs; Roaming IDE settings remain untouched." },
-      { name: "Chromium & Gecko per-profile caches", group: "browser", safety: "safe", path: "Chrome, Edge, Brave, Arc, Opera, Firefox, Zen (Cache, Code Cache, GPUCache, cache2)", note: "Enumerates every browser profile while leaving cookies, logins, and bookmarks untouched." },
-      { name: "Project build artifacts", group: "artifact", safety: "rebuild", path: "node_modules, target, build, dist, .next, .astro, .wrangler, .terraform, .zig-cache, .venv", note: "Requires sibling project manifest (Cargo.toml, package.json, *.tf, build.zig); skips installed apps." },
-      { name: "Steam, Minecraft, Modrinth & Prism", group: "game", safety: "safe", path: "steamapps/shadercache, .minecraft/webcache2, ModrinthApp/meta", note: "Shader caches and launcher downloads; game saves and worlds are never touched." },
-      { name: "Windows Update, WER & GPU Shaders", group: "system", safety: "safe", path: "SoftwareDistribution\\Download, Windows\\Temp, CrashDumps, NVIDIA/AMD DXCache", note: "System items require elevation and lock checkboxes when running standard-user." },
-      { name: "WSL2 & Docker Virtual Disks (VHDX)", group: "system", safety: "locked", path: "ext4.vhdx, docker_data.vhdx, %LOCALAPPDATA%\\Docker\\wsl\\*, %LOCALAPPDATA%\\wsl\\*", note: "Hard-locked in both UI and cleaner.rs with guidance to compact via wsl --shutdown + Optimize-VHD." },
-      { name: "Windows Virtual Memory & SSH Keys", group: "system", safety: "locked", path: "pagefile.sys, hiberfil.sys, swapfile.sys, ~/.ssh, ~/.gnupg, System32", note: "Unconditionally refused by cleaner.rs backend path guard." }
+      { name: "Duplicate AI model weights & build blobs", group: "ai", safety: "rebuild", sarif: "SLC004", path: "~/.cache/huggingface, ~/.ollama/models/blobs, %USERPROFILE%/.lmstudio, ~/Downloads/*.gguf", note: "3-phase size/edge/streaming-SHA256 deduplication; skips HF snapshots and deduplicates physical hardlinks." },
+      { name: "CI runner reclaimable disk budget gate", group: "system", safety: "review", sarif: "SLC005", path: "CI runner environment (--max-reclaimable-gb <GB>)", note: "Emits SARIF error level result and exits with code 3 when reclaimable/duplicate storage exceeds threshold." },
+      { name: "Claude Code transcripts & rewind", group: "ai", safety: "review", sarif: "SLC001", path: "~/.claude/projects, ~/.claude/file-history", note: "Per-project .jsonl transcripts and /rewind snapshots; never pre-selected." },
+      { name: "Claude Code debug, snapshots & paste", group: "ai", safety: "safe", sarif: "SLC001", path: "~/.claude/debug, shell-snapshots, paste-cache, %TEMP%\\claude", note: "Transient logs and shell state recreated automatically." },
+      { name: "Codex CLI sessions & logs", group: "ai", safety: "review", sarif: "SLC001", path: "~/.codex/sessions, ~/.codex/log", note: "Logs are tagged Safe; session resume transcripts are tagged Review." },
+      { name: "Antigravity & Gemini CLI logs", group: "ai", safety: "safe", sarif: "SLC001", path: "~/.gemini/tmp, ~/.gemini/antigravity-cli/logs", note: "Diagnostic logs and CLI temp buffers; auth and settings untouched." },
+      { name: "Cursor / Windsurf / VS Code caches", group: "editor", safety: "safe", sarif: "SLC001", path: "%APPDATA%\\<Editor>\\Cache, CachedData, CachedExtensionVSIXs, logs", note: "V8 bytecode cache and installed VSIX archives; workspaceStorage kept in Review." },
+      { name: "Cursor & Windsurf updater installers", group: "ai", safety: "safe", sarif: "SLC001", path: "%LOCALAPPDATA%\\cursor-updater, windsurf-updater", note: "Stale background installer binaries left after auto-updates." },
+      { name: "Hugging Face Hub & KaggleHub", group: "ai", safety: "rebuild", sarif: "SLC002", path: "$HF_HOME (~/.cache/huggingface), ~/.cache/kagglehub", note: "Downloaded model weights and datasets; re-fetched on demand." },
+      { name: "vLLM, Triton & ONNX Runtime", group: "ai", safety: "rebuild", sarif: "SLC002", path: "~/.cache/vllm, ~/.triton/cache, %LOCALAPPDATA%\\ONNXRuntime", note: "Compiled GPU kernels and DirectML execution graph caches." },
+      { name: "Aider, Continue.dev & wandb", group: "ai", safety: "safe", sarif: "SLC001", path: "~/.aider/caches, ~/.continue/index, ~/.cache/wandb", note: "Repo-map caches, local vector indexes, and staged W&B media." },
+      { name: "Playwright & Puppeteer browsers", group: "ai", safety: "rebuild", sarif: "SLC002", path: "%LOCALAPPDATA%\\ms-playwright, ~/.cache/puppeteer", note: "Headless Chromium/Firefox/WebKit builds; restore via playwright install." },
+      { name: "Cargo registry & target/ artifacts", group: "package", safety: "rebuild", sarif: "SLC003", path: "$CARGO_HOME/registry, <project>/target (with Cargo.toml)", note: ".crate tarballs, extracted sources, and marker-verified Rust target directories." },
+      { name: "npm, pnpm, Yarn & Bun caches", group: "package", safety: "safe", sarif: "SLC001", path: "%LOCALAPPDATA%\\npm-cache, pnpm-cache, Yarn\\Cache, ~/.bun/install/cache", note: "Package tarballs and metadata; pnpm hard-link store tagged Rebuild." },
+      { name: "uv, pip, Ruff & pre-commit", group: "package", safety: "safe", sarif: "SLC001", path: "$UV_CACHE_DIR, $PIP_CACHE_DIR, %LOCALAPPDATA%\\ruff\\cache, ~/.cache/pre-commit", note: "Python wheels, Ruff lint cache, and isolated pre-commit hook envs." },
+      { name: "Gradle caches, daemons & toolchains", group: "package", safety: "rebuild", sarif: "SLC002", path: "$GRADLE_USER_HOME/caches, daemon, wrapper/dists, jdks", note: "Daemon logs tagged Safe; shared dependencies and JDKs tagged Rebuild." },
+      { name: "JetBrains IDEs & Zed editor", group: "editor", safety: "rebuild", sarif: "SLC002", path: "%LOCALAPPDATA%\\JetBrains\\*, %LOCALAPPDATA%\\Zed\\logs, languages", note: "Local indexes and logs; Roaming IDE settings remain untouched." },
+      { name: "Chromium & Gecko per-profile caches", group: "browser", safety: "safe", sarif: "SLC001", path: "Chrome, Edge, Brave, Arc, Opera, Firefox, Zen (Cache, Code Cache, GPUCache, cache2)", note: "Enumerates every browser profile while leaving cookies, logins, and bookmarks untouched." },
+      { name: "Project build artifacts", group: "artifact", safety: "rebuild", sarif: "SLC003", path: "node_modules, target, build, dist, .next, .astro, .wrangler, .terraform, .zig-cache, .venv", note: "Requires sibling project manifest (Cargo.toml, package.json, *.tf, build.zig); skips installed apps." },
+      { name: "Steam, Minecraft, Modrinth & Prism", group: "game", safety: "safe", sarif: "SLC001", path: "steamapps/shadercache, .minecraft/webcache2, ModrinthApp/meta", note: "Shader caches and launcher downloads; game saves and worlds are never touched." },
+      { name: "Windows Update, WER & GPU Shaders", group: "system", safety: "safe", sarif: "SLC001", path: "SoftwareDistribution\\Download, Windows\\Temp, CrashDumps, NVIDIA/AMD DXCache", note: "System items require elevation and lock checkboxes when running standard-user." },
+      { name: "WSL2 & Docker Virtual Disks (VHDX)", group: "system", safety: "locked", sarif: "N/A", path: "ext4.vhdx, docker_data.vhdx, %LOCALAPPDATA%\\Docker\\wsl\\*, %LOCALAPPDATA%\\wsl\\*", note: "Hard-locked in both UI and cleaner.rs with guidance to compact via wsl --shutdown + Optimize-VHD." },
+      { name: "Windows Virtual Memory & SSH Keys", group: "system", safety: "locked", sarif: "N/A", path: "pagefile.sys, hiberfil.sys, swapfile.sys, ~/.ssh, ~/.gnupg, System32", note: "Unconditionally refused by cleaner.rs backend path guard." }
     ];
 
     const chipsEl = document.getElementById("stack-chips");
@@ -401,6 +520,85 @@
       document.getElementById("est-review").textContent = `Review-only history: ${review.toFixed(1)} GB`;
     }
 
+    const aiRuntimesEl = document.getElementById("ai-runtimes");
+    const aiModelsEl = document.getElementById("ai-models");
+    function renderAiCalculator() {
+      aiRuntimesEl.innerHTML = "";
+      for (const r of AI_RUNTIMES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chip" + (r.active ? " active-ai" : "");
+        btn.textContent = r.name;
+        btn.onclick = () => { r.active = !r.active; renderAiCalculator(); };
+        aiRuntimesEl.appendChild(btn);
+      }
+
+      aiModelsEl.innerHTML = "";
+      for (const m of AI_MODELS) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chip" + (m.active ? " active-ai" : "");
+        btn.textContent = `${m.name} (${m.sizeGb.toFixed(1)} GB)`;
+        btn.onclick = () => { m.active = !m.active; renderAiCalculator(); };
+        aiModelsEl.appendChild(btn);
+      }
+
+      const activeRuntimeIds = new Set(AI_RUNTIMES.filter(r => r.active).map(r => r.id));
+      let totalStoredGb = 0;
+      let dupeWasteGb = 0;
+      let hardlinkSavedGb = 0;
+      let casBlobsCount = 0;
+
+      for (const m of AI_MODELS) {
+        if (!m.active) continue;
+        const matchingRuntimes = m.runtimes.filter(rt => activeRuntimeIds.has(rt));
+        const count = matchingRuntimes.length;
+        if (count > 0) {
+          totalStoredGb += m.sizeGb * count;
+          if (count > 1) {
+            dupeWasteGb += m.sizeGb * (count - 1);
+            if (matchingRuntimes.includes("hf") && matchingRuntimes.includes("ollama")) {
+              hardlinkSavedGb += m.sizeGb * 0.25;
+            }
+          }
+          if (matchingRuntimes.some(rt => rt === "hf" || rt === "ollama")) {
+            casBlobsCount += count;
+          }
+        }
+      }
+
+      document.getElementById("ai-total-stored").textContent = `${totalStoredGb.toFixed(1)} GB`;
+      document.getElementById("ai-dupe-waste").textContent = `${dupeWasteGb.toFixed(1)} GB`;
+      document.getElementById("ai-hardlink-saved").textContent = `${hardlinkSavedGb.toFixed(1)} GB`;
+      document.getElementById("ai-cas-blobs").textContent = `${casBlobsCount} blobs`;
+
+      updateBudgetGate(dupeWasteGb);
+    }
+
+    const budgetSlider = document.getElementById("budget-slider");
+    const budgetValEl = document.getElementById("budget-val");
+    const budgetBadge = document.getElementById("budget-badge");
+    const cmdPreview = document.getElementById("cli-cmd-preview");
+
+    function updateBudgetGate(currentDupeWaste) {
+      const budgetGb = parseFloat(budgetSlider.value);
+      budgetValEl.textContent = `${budgetGb.toFixed(0)} GB`;
+      const exceeded = currentDupeWaste > budgetGb;
+      if (exceeded) {
+        budgetBadge.className = "badge b-fail";
+        budgetBadge.textContent = "FAIL: BUDGET EXCEEDED (exit 3 - SLC005)";
+      } else {
+        budgetBadge.className = "badge b-pass";
+        budgetBadge.textContent = "PASS (exit 0 - within budget)";
+      }
+      cmdPreview.textContent = `.\\SLClean-portable.exe --scan-dupes --trust-cas-names --max-reclaimable-gb ${budgetGb.toFixed(0)} --sarif dupes.sarif`;
+    }
+
+    budgetSlider.addEventListener("input", () => {
+      const dupeWaste = parseFloat(document.getElementById("ai-dupe-waste").textContent) || 0;
+      updateBudgetGate(dupeWaste);
+    });
+
     function renderRules() {
       const q = document.getElementById("rule-search").value.trim().toLowerCase();
       const g = document.getElementById("rule-group").value;
@@ -410,12 +608,13 @@
       for (const r of RULES) {
         if (g !== "all" && r.group !== g) continue;
         if (sf !== "all" && r.safety !== sf) continue;
-        if (q && ![r.name, r.path, r.note, r.group].some(x => x.toLowerCase().includes(q))) continue;
+        if (q && ![r.name, r.path, r.note, r.group, r.sarif].some(x => x && x.toLowerCase().includes(q))) continue;
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td><strong>${r.name}</strong></td>
           <td><code>${r.group}</code></td>
           <td><span class="badge b-${r.safety}">${r.safety}</span></td>
+          <td><code>${r.sarif}</code></td>
           <td><code>${r.path}</code></td>
           <td>${r.note}</td>
         `;
@@ -427,6 +626,7 @@
     document.getElementById("rule-group").addEventListener("change", renderRules);
     document.getElementById("rule-safety").addEventListener("change", renderRules);
     renderEstimator();
+    renderAiCalculator();
     renderRules();
   </script>
 </body>

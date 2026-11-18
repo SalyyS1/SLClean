@@ -211,8 +211,11 @@ If your workspace drive is low on disk space, redirect Cargo's build directory f
 ```text
 src-tauri/src/
   lib.rs              Tauri IPC commands + live progress event streams
+  cli.rs              Headless CLI runner (--scan-dupes, --scan-json, --max-reclaimable-gb, --sarif)
+  blob_dupes.rs       Content-addressed AI model weight & artifact blob analyzer (3-phase + CAS fastpath)
+  sarif.rs            OASIS SARIF v2.1.0 generator and CI disk-budget gate evaluator (SLC001-SLC005)
   catalog.rs          Bilingual CatalogEntry model, environment-variable root resolution, deduplication
-  catalog_specs.rs    Static catalog specifications (~95 known cache locations)
+  catalog_specs.rs    Static catalog specifications (105+ known cache locations)
   catalog_dynamic.rs  Dynamic per-machine discovery (browser profiles, Electron, VS Code forks, JetBrains, Steam, Store)
   project_roots.rs    Fixed-drive + user-folder walk with system exclusions and custom Settings roots
   artifacts.rs        Project-marker-verified build artifact detection (node_modules, target, build, .venv, etc.)
@@ -242,7 +245,40 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run verify:ui
 ```
 
-`cargo test` runs 74 unit tests by default covering path protection guards, locked-file skipping, parallel sizing, artifact project markers, deduplication, `UserAssist` decoding, `.lnk` binary parsing, system component classification, large-file maps, 3-stage duplicate hashing, `StartupApproved` registry flags, and history snapshot pruning (plus 7 `--ignored` live inspection tests).
+`cargo test` runs unit tests covering path protection guards, locked-file skipping, parallel sizing, artifact project markers, deduplication, content-addressed AI model blob hashing, SARIF v2.1.0 generation, CI disk-budget gates, `UserAssist` decoding, `.lnk` binary parsing, system component classification, large-file maps, 3-stage duplicate hashing, `StartupApproved` registry flags, and history snapshot pruning.
+
+## Headless CLI and CI Runner Mode (v0.5.0)
+
+SLClean includes a headless command-line interface designed for continuous integration runners, build agents, and automated maintenance without requiring a display or desktop window:
+
+```bat
+# Audit duplicate Hugging Face, Ollama, and build artifact blobs with zero-read CAS fastpath
+.\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
+
+# Fail CI runner with exit code 3 if reclaimable disk bloat exceeds threshold
+.\SLClean-portable.exe --scan-json --include-artifacts --max-reclaimable-gb 15 --sarif slclean.sarif
+
+# Enforce budget gate on duplicate AI model weights across custom drive roots
+.\SLClean-portable.exe --scan-dupes --dupes-root D:\Models --dupes-root C:\Users\%USERNAME%\.ollama --max-reclaimable-gb 10 --sarif dupes.sarif
+
+# Preview exact Safe caches eligible for cleanup (read-only dry-run by default)
+.\SLClean-portable.exe --clean-safe --dry-run
+
+# Inspect all 105+ compiled static catalog rules as structured JSON
+.\SLClean-portable.exe --list-specs
+```
+
+### SARIF Rule Mappings (OASIS SARIF v2.1.0)
+
+When `--sarif <FILE>` is provided, SLClean emits standards-compliant SARIF for GitHub Code Scanning:
+
+| Rule ID | Name | Category | Default Level |
+|---|---|---|---|
+| `SLC001` | SafeDeveloperCacheFound | Cache | note |
+| `SLC002` | RebuildablePackageCacheFound | Package | note |
+| `SLC003` | BuildArtifactFound | Artifact | note |
+| `SLC004` | DuplicateModelOrArtifactBlobFound | Duplicate | warning |
+| `SLC005` | ReclaimableDiskBudgetExceeded | Budget | error |
 
 ## Known Limitations
 

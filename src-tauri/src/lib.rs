@@ -2,43 +2,45 @@
 //! Thùng rác, cài đặt, chọn thư mục. Việc nặng chạy trên thread riêng; kết quả từng mục
 //! được phát qua event để UI cập nhật dần thay vì chờ toàn bộ.
 
+#[cfg(windows)]
 mod apps;
 mod artifacts;
 mod big_files;
+pub mod blob_dupes;
 mod catalog;
 mod catalog_dynamic;
 mod catalog_specs;
 mod cleaner;
-mod cli;
+pub mod cli;
 mod drives;
 mod duplicates;
 mod elevation;
 mod history;
+#[cfg(windows)]
 mod installed_apps;
+#[cfg(windows)]
 mod leftovers;
 mod parallel;
 mod project_roots;
+#[cfg(windows)]
 mod recycle_bin;
+#[cfg(windows)]
 mod registry;
+pub mod sarif;
 mod settings;
+#[cfg(windows)]
 mod shortcuts;
+#[cfg(windows)]
 mod single_instance;
 mod sizer;
+#[cfg(windows)]
 mod startup;
+#[cfg(windows)]
 mod store_apps;
+#[cfg(windows)]
 mod user_assist;
 
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_dialog::DialogExt;
-
-pub struct ScanState {
-    cancel: Arc<AtomicBool>,
-}
+use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub struct CatalogItem {
@@ -48,6 +50,16 @@ pub struct CatalogItem {
     pub files: u64,
     pub denied: u64,
 }
+
+#[cfg(windows)]
+mod gui {
+    use super::*;
+    use tauri::{AppHandle, Emitter, Manager, State};
+    use tauri_plugin_dialog::DialogExt;
+
+    pub struct ScanState {
+        cancel: Arc<AtomicBool>,
+    }
 
 /// Số liệu tạm trong lúc đo một mục, phát định kỳ để UI hiện số đang tăng.
 #[derive(Clone, Serialize)]
@@ -479,4 +491,17 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");
+    }
+}
+
+#[cfg(windows)]
+pub use gui::run;
+
+#[cfg(not(windows))]
+pub fn run() {
+    if let Some(code) = cli::try_run_from_env() {
+        std::process::exit(code);
+    }
+    eprintln!("SLClean GUI requires Windows. Use --help for headless CLI commands.");
+    std::process::exit(1);
 }

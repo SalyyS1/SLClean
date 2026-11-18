@@ -274,10 +274,15 @@ mod tests {
         let root = fixture("sibling");
         let s = scan_at(&root);
         let g = &s.groups[0];
-        let by = |name: &str| g.files.iter().find(|f| f.path.ends_with(name)).unwrap();
-        assert!(by("one\\a.bin").same_dir_as_sibling, "hai bản cùng nằm trong one\\");
-        assert!(by("one\\a copy.bin").same_dir_as_sibling);
-        assert!(!by("two\\a.bin").same_dir_as_sibling, "bản trong two\\ đứng một mình ở thư mục đó");
+        let by = |name: &str| {
+            g.files
+                .iter()
+                .find(|f| f.path.to_string_lossy().replace('\\', "/").ends_with(name))
+                .unwrap()
+        };
+        assert!(by("one/a.bin").same_dir_as_sibling, "hai bản cùng nằm trong one/");
+        assert!(by("one/a copy.bin").same_dir_as_sibling);
+        assert!(!by("two/a.bin").same_dir_as_sibling, "bản trong two/ đứng một mình ở thư mục đó");
         // Sắp cũ nhất trước để người dùng nhận ra bản gốc.
         assert!(g.files[0].modified <= g.files[1].modified);
         let _ = std::fs::remove_dir_all(&root);
@@ -315,6 +320,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[cfg(windows)]
     #[test]
     fn program_areas_cover_the_installer_owned_folders() {
         let areas = program_areas();

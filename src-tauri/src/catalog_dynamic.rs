@@ -4,6 +4,7 @@
 
 use crate::catalog::{lower, make_entry, CatalogEntry, Roots, Safety, Text};
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 
@@ -284,9 +285,11 @@ fn jetbrains(r: &Roots, out: &mut Vec<CatalogEntry>) {
 
 // ---------- Steam ----------
 
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn steam_install_dir(r: &Roots) -> Option<PathBuf> {
+    #[cfg(windows)]
     if let Ok(out) = std::process::Command::new("reg")
         .args(["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"])
         .creation_flags(CREATE_NO_WINDOW)

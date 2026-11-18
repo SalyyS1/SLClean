@@ -74,17 +74,19 @@ fn is_system_file(name: &str) -> bool {
 /// Xoá thẳng file này sẽ mất trắng cả bản phân phối Linux hoặc volume Docker, nên phải khoá
 /// cả ở UI lẫn `cleaner::is_protected` và hướng dẫn người dùng thu gọn (compact) an toàn.
 pub fn is_managed_vhdx(path: &Path) -> bool {
-    if !ext_of(path).eq_ignore_ascii_case("vhdx") {
+    let s = path.to_string_lossy().replace('\\', "/");
+    let norm = Path::new(&s);
+    if !ext_of(norm).eq_ignore_ascii_case("vhdx") {
         return false;
     }
-    let name = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let name = norm.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     if matches!(name.as_str(), "ext4.vhdx" | "docker_data.vhdx" | "swap.vhdx") {
         return true;
     }
-    let norm = path.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
-    norm.contains("\\docker\\wsl\\")
-        || norm.contains("\\appdata\\local\\wsl\\")
-        || (norm.contains("\\appdata\\local\\packages\\") && norm.contains("\\localstate\\"))
+    let norm_s = s.to_ascii_lowercase();
+    norm_s.contains("/docker/wsl/")
+        || norm_s.contains("/appdata/local/wsl/")
+        || (norm_s.contains("/appdata/local/packages/") && norm_s.contains("/localstate/"))
 }
 
 fn classify_lock(name: &str, path: &Path) -> Option<String> {
