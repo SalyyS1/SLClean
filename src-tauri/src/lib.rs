@@ -54,6 +54,11 @@ pub struct CatalogItem {
 #[cfg(windows)]
 mod gui {
     use super::*;
+    use serde::Deserialize;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
     use tauri::{AppHandle, Emitter, Manager, State};
     use tauri_plugin_dialog::DialogExt;
 
