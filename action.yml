@@ -1,0 +1,135 @@
+name: "SLClean Runner Cache, AI Weight & Environment Auditor"
+description: "Audit developer caches, duplicate AI model weight blobs, and orphaned environments with OASIS SARIF v2.1.0 and disk-budget gates."
+author: "SalyyS1"
+branding:
+  icon: "hard-drive"
+  color: "green"
+
+inputs:
+  mode:
+    description: "Audit mode: scan-envs, scan-dupes, or scan-json"
+    required: false
+    default: "scan-envs"
+  stale-days:
+    description: "Inactivity threshold in days for scan-envs"
+    required: false
+    default: "30"
+  max-reclaimable-gb:
+    description: "Optional GiB ceiling; exits with code 3 and emits SLC005 if exceeded"
+    required: false
+    default: ""
+  reclaim-orphans:
+    description: "Delete verified orphan environments (missing project manifest or broken interpreter) in scan-envs mode"
+    required: false
+    default: "false"
+  sarif:
+    description: "Path for OASIS SARIF v2.1.0 report output"
+    required: false
+    default: "slclean.sarif"
+  out:
+    description: "Path for JSON report output"
+    required: false
+    default: "slclean-report.json"
+  version:
+    description: "SLClean release tag to download on Windows runners"
+    required: false
+    default: "v0.6.0"
+
+outputs:
+  sarif-file:
+    description: "Generated OASIS SARIF v2.1.0 report path"
+    value: ${{ steps.run-slclean.outputs.sarif_file }}
+  report-file:
+    description: "Generated JSON report path"
+    value: ${{ steps.run-slclean.outputs.report_file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run SLClean on Windows
+      if: runner.os == 'Windows'
+      id: run-win
+      shell: pwsh
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_STALE_DAYS: ${{ inputs.stale-days }}
+        INPUT_MAX_GB: ${{ inputs.max-reclaimable-gb }}
+        INPUT_RECLAIM: ${{ inputs.reclaim-orphans }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_VER: ${{ inputs.version }}
+      run: |
+        $binDir = Join-Path $env:RUNNER_TEMP "slclean-bin"
+        New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+        $exe = Join-Path $binDir "SLClean-portable.exe"
+        $url = "https://github.com/SalyyS1/SLClean/releases/download/$($env:INPUT_VER)/SLClean-portable.exe"
+        Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+        $cliArgs = @("--$($env:INPUT_MODE)")
+        if ($env:INPUT_MODE -eq "scan-envs") {
+          $cliArgs += @("--stale-days", $env:INPUT_STALE_DAYS)
+          if ($env:INPUT_RECLAIM -eq "true") {
+            $cliArgs += @("--reclaim-orphans", "--confirm-delete")
+          }
+        }
+        if ($env:INPUT_MODE -eq "scan-dupes") {
+          $cliArgs += "--trust-cas-names"
+        }
+        if ($env:INPUT_MAX_GB -ne "") {
+          $cliArgs += @("--max-reclaimable-gb", $env:INPUT_MAX_GB)
+        }
+        if ($env:INPUT_SARIF -ne "") {
+          $cliArgs += @("--sarif", $env:INPUT_SARIF)
+        }
+        if ($env:INPUT_OUT -ne "") {
+          $cliArgs += @("--out", $env:INPUT_OUT)
+        }
+        & $exe @cliArgs
+
+    - name: Run SLClean on Linux or macOS
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_STALE_DAYS: ${{ inputs.stale-days }}
+        INPUT_MAX_GB: ${{ inputs.max-reclaimable-gb }}
+        INPUT_RECLAIM: ${{ inputs.reclaim-orphans }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_OUT: ${{ inputs.out }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        TARGET_DIR="${RUNNER_TEMP:-/tmp}/slclean-action-target"
+        CARGO_TARGET_DIR="$TARGET_DIR" cargo build --release --manifest-path "$ACTION_PATH/src-tauri/Cargo.toml"
+        BIN="$TARGET_DIR/release/slclean"
+        ARGS=("--${INPUT_MODE}")
+        if [ "$INPUT_MODE" = "scan-envs" ]; then
+          ARGS+=("--stale-days" "$INPUT_STALE_DAYS")
+          if [ "$INPUT_RECLAIM" = "true" ]; then
+            ARGS+=("--reclaim-orphans" "--confirm-delete")
+          fi
+        fi
+        if [ "$INPUT_MODE" = "scan-dupes" ]; then
+          ARGS+=("--trust-cas-names")
+        fi
+        if [ -n "$INPUT_MAX_GB" ]; then
+          ARGS+=("--max-reclaimable-gb" "$INPUT_MAX_GB")
+        fi
+        if [ -n "$INPUT_SARIF" ]; then
+          ARGS+=("--sarif" "$INPUT_SARIF")
+        fi
+        if [ -n "$INPUT_OUT" ]; then
+          ARGS+=("--out" "$INPUT_OUT")
+        fi
+        "$BIN" "${ARGS[@]}"
+        rm -rf "$TARGET_DIR"
+
+    - name: Export outputs
+      id: run-slclean
+      if: always()
+      shell: bash
+      env:
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_OUT: ${{ inputs.out }}
+      run: |
+        echo "sarif_file=${INPUT_SARIF}" >> "$GITHUB_OUTPUT"
+        echo "report_file=${INPUT_OUT}" >> "$GITHUB_OUTPUT"

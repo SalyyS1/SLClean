@@ -211,9 +211,10 @@ If your workspace drive is low on disk space, redirect Cargo's build directory f
 ```text
 src-tauri/src/
   lib.rs              Tauri IPC commands + live progress event streams
-  cli.rs              Headless CLI runner (--scan-dupes, --scan-json, --max-reclaimable-gb, --sarif)
+  cli.rs              Headless CLI runner (--scan-envs, --scan-dupes, --scan-json, --max-reclaimable-gb, --sarif)
+  env_reclaimer.rs    Age-weighted orphaned Python/Node/Rust environment & container layer reclaimer (SLC006-SLC008)
   blob_dupes.rs       Content-addressed AI model weight & artifact blob analyzer (3-phase + CAS fastpath)
-  sarif.rs            OASIS SARIF v2.1.0 generator and CI disk-budget gate evaluator (SLC001-SLC005)
+  sarif.rs            OASIS SARIF v2.1.0 generator and CI disk-budget gate evaluator (SLC001-SLC008)
   catalog.rs          Bilingual CatalogEntry model, environment-variable root resolution, deduplication
   catalog_specs.rs    Static catalog specifications (105+ known cache locations)
   catalog_dynamic.rs  Dynamic per-machine discovery (browser profiles, Electron, VS Code forks, JetBrains, Steam, Store)
@@ -247,11 +248,17 @@ npm run verify:ui
 
 `cargo test` runs unit tests covering path protection guards, locked-file skipping, parallel sizing, artifact project markers, deduplication, content-addressed AI model blob hashing, SARIF v2.1.0 generation, CI disk-budget gates, `UserAssist` decoding, `.lnk` binary parsing, system component classification, large-file maps, 3-stage duplicate hashing, `StartupApproved` registry flags, and history snapshot pruning.
 
-## Headless CLI and CI Runner Mode (v0.5.0)
+## Headless CLI, Environment Reclaimer, and GitHub Action (v0.6.0)
 
-SLClean includes a headless command-line interface designed for continuous integration runners, build agents, and automated maintenance without requiring a display or desktop window:
+SLClean includes a headless command-line interface and composite GitHub Action (`action.yml`) designed for continuous integration runners, build agents, and automated maintenance without requiring a display or desktop window:
 
 ```bat
+# Scan project roots for orphaned Python venvs (broken pyvenv.cfg interpreter), manifest-less node_modules, and stale Cargo targets
+.\SLClean-portable.exe --scan-envs --stale-days 30 --sarif envs.sarif --out envs.json
+
+# Reclaim verified orphan environments (broken interpreter or missing project manifest) while guarding WSL2/Docker .vhdx disks
+.\SLClean-portable.exe --scan-envs --reclaim-orphans --confirm-delete --out reclaim.json
+
 # Audit duplicate Hugging Face, Ollama, and build artifact blobs with zero-read CAS fastpath
 .\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
 
@@ -268,17 +275,38 @@ SLClean includes a headless command-line interface designed for continuous integ
 .\SLClean-portable.exe --list-specs
 ```
 
+### Composite GitHub Action (`uses: SalyyS1/SLClean@v0.6.0`)
+
+```yaml
+- name: Audit runner environments and enforce 15 GiB bloat ceiling
+  uses: SalyyS1/SLClean@v0.6.0
+  with:
+    mode: scan-envs
+    stale-days: "21"
+    max-reclaimable-gb: "15"
+    sarif: slclean.sarif
+
+- name: Upload SARIF to GitHub Code Scanning
+  if: always()
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: slclean.sarif
+```
+
 ### SARIF Rule Mappings (OASIS SARIF v2.1.0)
 
 When `--sarif <FILE>` is provided, SLClean emits standards-compliant SARIF for GitHub Code Scanning:
 
 | Rule ID | Name | Category | Default Level |
 |---|---|---|---|
-| `SLC001` | SafeDeveloperCacheFound | Cache | note |
-| `SLC002` | RebuildablePackageCacheFound | Package | note |
-| `SLC003` | BuildArtifactFound | Artifact | note |
-| `SLC004` | DuplicateModelOrArtifactBlobFound | Duplicate | warning |
-| `SLC005` | ReclaimableDiskBudgetExceeded | Budget | error |
+| `SLC001` | SafeCacheReclaimable | Cache | note |
+| `SLC002` | RebuildableCacheBloat | Package | note |
+| `SLC003` | ProjectBuildArtifact | Artifact | note |
+| `SLC004` | DuplicateModelOrArtifactBlob | Duplicate | warning |
+| `SLC005` | DiskBudgetExceeded | Budget | error |
+| `SLC006` | OrphanedOrStaleLanguageEnvironment | Environment | warning |
+| `SLC007` | StaleToolchainBuildTarget | Toolchain | warning |
+| `SLC008` | DormantContainerLayerOrGuardedVhdx | Container / VHDX | note |
 
 ## Known Limitations
 

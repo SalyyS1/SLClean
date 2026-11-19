@@ -299,10 +299,10 @@
 <body>
   <div class="wrap">
     <header>
-      <span class="eyebrow">SLClean v0.5.0 | Rust + Tauri 2 | Zero Telemetry</span>
-      <h1>Windows AI &amp; Developer Cache Footprint Explorer</h1>
+      <span class="eyebrow">SLClean v0.6.0 | Rust + Tauri 2 | Zero Telemetry</span>
+      <h1>Windows AI, Environment &amp; Developer Cache Footprint Explorer</h1>
       <p class="lead">
-        Inspect every cache rule, project artifact marker, duplicate AI weight blob analyzer, and path-protection guard built into SLClean before installing. Toggle your active Windows toolchains below to estimate typical reclaimable disk bloat.
+        Inspect every cache rule, orphaned Python/Node/Rust environment reclaimer (SLC006-SLC008), duplicate AI weight blob analyzer, and path-protection guard built into SLClean before installing. Toggle your active toolchains below to estimate reclaimable disk bloat.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/SalyyS1/SLClean/releases/latest">Download Windows Installer &amp; Portable .exe</a>
@@ -327,9 +327,9 @@
         <div class="stat-sub">Protects WSL2 ext4.vhdx, Docker, .ssh, pagefile</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Headless CLI &amp; CI Gate</div>
-        <div class="stat-value">--scan-dupes</div>
-        <div class="stat-sub">OASIS SARIF v2.1.0 &amp; --max-reclaimable-gb</div>
+        <div class="stat-label">Headless CLI &amp; CI Action</div>
+        <div class="stat-value">--scan-envs</div>
+        <div class="stat-sub">SLC001-SLC008 SARIF v2.1.0 &amp; action.yml</div>
       </div>
     </section>
 
@@ -384,8 +384,53 @@
       <pre id="cli-cmd-preview">.\SLClean-portable.exe --scan-dupes --trust-cas-names --max-reclaimable-gb 10 --sarif dupes.sarif</pre>
     </section>
 
+    <section class="ai-calculator">
+      <h2>3. Orphaned Environment &amp; Stale Toolchain Age-Weighted Reclaimer (v0.6.0)</h2>
+      <p class="sub">
+        SLClean <code>--scan-envs</code> inspects <code>pyvenv.cfg</code> base interpreters, sibling project manifests (<code>pyproject.toml</code>, <code>package.json</code>, <code>Cargo.toml</code>), and <code>CACHEDIR.TAG</code> signatures to separate broken or orphaned environments (2.5x-2.75x priority weight) from merely inactive build targets while locking WSL2/Docker <code>.vhdx</code> virtual disks against deletion.
+      </p>
+
+      <div class="budget-slider-row">
+        <label for="stale-slider">Inactivity Threshold (<code>--stale-days</code>): <strong id="stale-val">30 days</strong></label>
+        <input type="range" id="stale-slider" min="7" max="120" step="1" value="30" />
+      </div>
+
+      <div class="sim-grid">
+        <div class="sim-card">
+          <div class="sim-label">Orphaned Envs (SLC006/007)</div>
+          <div class="sim-val" id="env-orphan-gb" style="color: var(--lock);">0.0 GB</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Stale Targets &amp; Layers</div>
+          <div class="sim-val" id="env-stale-gb" style="color: var(--rebuild);">0.0 GB</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Guarded VHDX (SLC008)</div>
+          <div class="sim-val" id="env-vhdx-gb" style="color: var(--review);">24.0 GB (Locked)</div>
+        </div>
+        <div class="sim-card">
+          <div class="sim-label">Top Priority Score</div>
+          <div class="sim-val" id="env-top-score" style="color: var(--accent);">0.00</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Environment / Target</th>
+            <th>Status</th>
+            <th>SARIF</th>
+            <th>Age</th>
+            <th>Size</th>
+            <th>Priority Score</th>
+          </tr>
+        </thead>
+        <tbody id="env-rows"></tbody>
+      </table>
+    </section>
+
     <section class="explorer">
-      <h2>3. Detection &amp; Protection Rule Catalog</h2>
+      <h2>4. Detection &amp; Protection Rule Catalog</h2>
       <p class="sub">Every location is resolved dynamically from environment variables (%LOCALAPPDATA%, %APPDATA%, CARGO_HOME, GRADLE_USER_HOME, HF_HOME). Nothing is deleted automatically.</p>
       <div class="toolbar">
         <input type="search" id="rule-search" placeholder="Filter rules by tool, path, category, or SARIF rule (e.g. cursor, huggingface, SLC004)..." />
@@ -423,22 +468,19 @@
     </section>
 
     <section class="cli-box">
-      <h2>4. Headless CLI Audit &amp; CI Runner Mode (v0.5.0)</h2>
-      <p class="sub">Audit workstation cache growth, verify duplicate AI model blobs, and gate CI runners without opening a GUI window.</p>
-      <pre># Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath
+      <h2>5. Headless CLI Audit, Environment Reclaimer &amp; GitHub Action (v0.6.0)</h2>
+      <p class="sub">Audit workstation cache growth, reclaim orphaned Python/Node/Rust environments, verify duplicate AI model blobs, and gate CI runners without opening a GUI window.</p>
+      <pre># Scan project roots for broken Python venvs, manifest-less node_modules, and stale Cargo targets (SLC006-SLC008)
+.\SLClean-portable.exe --scan-envs --stale-days 30 --sarif envs.sarif --out envs.json
+
+# Reclaim verified orphan environments while preserving active WSL2/Docker .vhdx virtual disks
+.\SLClean-portable.exe --scan-envs --reclaim-orphans --confirm-delete
+
+# Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath
 .\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
 
 # Export OASIS SARIF v2.1.0 report and fail CI runner (exit code 3) if reclaimable disk bloat exceeds 15 GB
-.\SLClean-portable.exe --scan-json --include-artifacts --max-reclaimable-gb 15 --sarif slclean.sarif
-
-# Enforce budget gate on duplicate AI model weights across custom drive roots
-.\SLClean-portable.exe --scan-dupes --dupes-root D:\Models --dupes-root C:\Users\%USERNAME%\.ollama --max-reclaimable-gb 10 --sarif dupes.sarif
-
-# Preview exact Safe caches eligible for cleanup (read-only dry-run by default)
-.\SLClean-portable.exe --clean-safe --dry-run
-
-# Inspect all 105+ compiled static catalog rules as structured JSON
-.\SLClean-portable.exe --list-specs</pre>
+.\SLClean-portable.exe --scan-json --include-artifacts --max-reclaimable-gb 15 --sarif slclean.sarif</pre>
     </section>
   </div>
 
@@ -625,8 +667,61 @@
     document.getElementById("rule-search").addEventListener("input", renderRules);
     document.getElementById("rule-group").addEventListener("change", renderRules);
     document.getElementById("rule-safety").addEventListener("change", renderRules);
+
+    const SAMPLE_ENVS = [
+      { path: "D:\\repos\\legacy-rag\\.venv", status: "broken_interpreter", sarif: "SLC006", ageDays: 94, sizeGb: 3.4, weight: 2.75, safe: true },
+      { path: "D:\\repos\\old-crate\\target (CACHEDIR.TAG)", status: "missing_project_manifest", sarif: "SLC007", ageDays: 62, sizeGb: 4.8, weight: 2.50, safe: true },
+      { path: "C:\\Users\\dev\\archived-ui\\node_modules", status: "missing_project_manifest", sarif: "SLC006", ageDays: 45, sizeGb: 1.3, weight: 2.50, safe: true },
+      { path: "D:\\repos\\engine\\target", status: "stale_inactive", sarif: "SLC007", ageDays: 51, sizeGb: 5.2, weight: 1.15, safe: true },
+      { path: "C:\\ProgramData\\Docker\\buildkit\\layer-export.tar", status: "stale_inactive", sarif: "SLC008", ageDays: 78, sizeGb: 2.6, weight: 1.35, safe: true },
+      { path: "D:\\repos\\active-api\\node_modules", status: "stale_inactive", sarif: "SLC006", ageDays: 18, sizeGb: 0.9, weight: 1.00, safe: true },
+      { path: "%LOCALAPPDATA%\\Docker\\wsl\\disk\\docker_data.vhdx", status: "locked_vhdx_guard", sarif: "SLC008", ageDays: 120, sizeGb: 24.0, weight: 0.0, safe: false }
+    ];
+
+    const staleSlider = document.getElementById("stale-slider");
+    function renderEnvReclaimer() {
+      const staleThreshold = parseInt(staleSlider.value, 10);
+      document.getElementById("stale-val").textContent = `${staleThreshold} days`;
+      let orphanGb = 0;
+      let staleGb = 0;
+      let vhdxGb = 0;
+      const matched = [];
+      for (const e of SAMPLE_ENVS) {
+        const isOrphan = e.status === "broken_interpreter" || e.status === "missing_project_manifest";
+        const isVhdx = e.status === "locked_vhdx_guard";
+        if (!isOrphan && !isVhdx && e.ageDays < staleThreshold) continue;
+        const score = (!e.safe || e.weight <= 0) ? 0 : (e.sizeGb * Math.max(0.25, Math.log(1 + e.ageDays)) * e.weight);
+        if (isOrphan) orphanGb += e.sizeGb;
+        else if (isVhdx) vhdxGb += e.sizeGb;
+        else staleGb += e.sizeGb;
+        matched.push(Object.assign({}, e, { score }));
+      }
+      matched.sort((a, b) => b.score - a.score || b.sizeGb - a.sizeGb);
+      document.getElementById("env-orphan-gb").textContent = `${orphanGb.toFixed(1)} GB`;
+      document.getElementById("env-stale-gb").textContent = `${staleGb.toFixed(1)} GB`;
+      document.getElementById("env-vhdx-gb").textContent = `${vhdxGb.toFixed(1)} GB (Locked)`;
+      document.getElementById("env-top-score").textContent = matched.length ? matched[0].score.toFixed(2) : "0.00";
+      const tbody = document.getElementById("env-rows");
+      tbody.innerHTML = "";
+      for (const m of matched) {
+        const badgeCls = !m.safe ? "b-locked" : (m.status === "stale_inactive" ? "b-rebuild" : "b-safe");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><code>${m.path}</code></td>
+          <td><span class="badge ${badgeCls}">${m.status}</span></td>
+          <td><code>${m.sarif}</code></td>
+          <td>${m.ageDays}d</td>
+          <td>${m.sizeGb.toFixed(1)} GB</td>
+          <td><strong>${m.score.toFixed(2)}</strong></td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+    staleSlider.addEventListener("input", renderEnvReclaimer);
+
     renderEstimator();
     renderAiCalculator();
+    renderEnvReclaimer();
     renderRules();
   </script>
 </body>

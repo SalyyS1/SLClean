@@ -15,6 +15,7 @@ pub mod cli;
 mod drives;
 mod duplicates;
 mod elevation;
+pub mod env_reclaimer;
 mod history;
 #[cfg(windows)]
 mod installed_apps;

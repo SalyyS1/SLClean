@@ -4,8 +4,8 @@
 //! enforce CI runner disk budgets (`--max-reclaimable-gb`), or preview/execute safe cleanups.
 
 use crate::{
-    artifacts, blob_dupes, catalog, catalog_specs, cleaner, drives, elevation, parallel,
-    project_roots, sarif, settings, sizer,
+    artifacts, blob_dupes, catalog, catalog_specs, cleaner, drives, elevation, env_reclaimer,
+    parallel, project_roots, sarif, settings, sizer,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -34,6 +34,16 @@ pub enum CliCommand {
         roots: Vec<PathBuf>,
         min_dupe_bytes: u64,
         trust_cas_names: bool,
+        max_reclaimable_gb: Option<f64>,
+        sarif: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    ScanEnvs {
+        roots: Vec<PathBuf>,
+        stale_days: u64,
+        reclaim_orphans: bool,
+        dry_run: bool,
+        to_trash: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
         out: Option<PathBuf>,
@@ -70,6 +80,18 @@ struct CliDupesReport {
     budget_gate: Option<sarif::BudgetGate>,
     #[serde(flatten)]
     scan: blob_dupes::BlobDupReport,
+}
+
+#[derive(Serialize)]
+struct CliEnvsReport {
+    version: &'static str,
+    scanned_at: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    budget_gate: Option<sarif::BudgetGate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reclaim_summary: Option<env_reclaimer::EnvReclaimSummary>,
+    #[serde(flatten)]
+    scan: env_reclaimer::EnvScanReport,
 }
 
 #[derive(Serialize)]
@@ -123,6 +145,9 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
     let mut to_trash = false;
     let mut trust_cas_names = false;
     let mut dupes_roots: Vec<PathBuf> = Vec::new();
+    let mut env_roots: Vec<PathBuf> = Vec::new();
+    let mut stale_days: u64 = env_reclaimer::DEFAULT_STALE_DAYS;
+    let mut reclaim_orphans = false;
     let mut min_dupe_bytes: u64 = blob_dupes::DEFAULT_MIN_BLOB_BYTES;
     let mut max_reclaimable_gb: Option<f64> = None;
     let mut sarif_out: Option<PathBuf> = None;
@@ -136,12 +161,30 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--list-specs" => mode = Some("list-specs"),
             "--scan-json" => mode = Some("scan-json"),
             "--scan-dupes" => mode = Some("scan-dupes"),
+            "--scan-envs" => mode = Some("scan-envs"),
             "--clean-safe" => mode = Some("clean-safe"),
             "--include-artifacts" => include_artifacts = true,
             "--trust-cas-names" => trust_cas_names = true,
+            "--reclaim-orphans" => reclaim_orphans = true,
             "--dry-run" => explicit_dry_run = true,
             "--confirm-delete" => confirm_delete = true,
             "--trash" => to_trash = true,
+            "--env-root" => {
+                i += 1;
+                let Some(p) = args.get(i) else {
+                    return Err("missing directory after --env-root".into());
+                };
+                env_roots.push(PathBuf::from(p));
+            }
+            "--stale-days" => {
+                i += 1;
+                let Some(raw) = args.get(i) else {
+                    return Err("missing integer after --stale-days".into());
+                };
+                stale_days = raw
+                    .parse::<u64>()
+                    .map_err(|_| format!("invalid non-negative integer for --stale-days: {raw}"))?;
+            }
             "--dupes-root" => {
                 i += 1;
                 let Some(p) = args.get(i) else {
@@ -191,8 +234,13 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
 
     match mode {
         None => {
-            if max_reclaimable_gb.is_some() || sarif_out.is_some() || !dupes_roots.is_empty() {
-                return Err("specify a command mode such as --scan-json or --scan-dupes (try --help)".into());
+            if max_reclaimable_gb.is_some()
+                || sarif_out.is_some()
+                || !dupes_roots.is_empty()
+                || !env_roots.is_empty()
+                || reclaim_orphans
+            {
+                return Err("specify a command mode such as --scan-json, --scan-dupes, or --scan-envs (try --help)".into());
             }
             Ok(None)
         }
@@ -211,6 +259,19 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             sarif: sarif_out,
             out,
         })),
+        Some("scan-envs") => {
+            let dry_run = explicit_dry_run || !confirm_delete;
+            Ok(Some(CliCommand::ScanEnvs {
+                roots: env_roots,
+                stale_days,
+                reclaim_orphans,
+                dry_run,
+                to_trash,
+                max_reclaimable_gb,
+                sarif: sarif_out,
+                out,
+            }))
+        }
         Some("clean-safe") => {
             let dry_run = explicit_dry_run || !confirm_delete;
             Ok(Some(CliCommand::CleanSafe { dry_run, to_trash, out }))
@@ -283,12 +344,16 @@ pub fn help_text() -> String {
            slclean --list-specs              Print all static detection rules as JSON\n  \
            slclean --scan-json [OPTIONS]     Run read-only parallel cache scan as JSON/SARIF\n  \
            slclean --scan-dupes [OPTIONS]    Audit duplicate HuggingFace/Ollama/artifact blobs\n  \
+           slclean --scan-envs [OPTIONS]     Audit or reclaim orphaned/stale envs & targets\n  \
            slclean --clean-safe [OPTIONS]    Preview or clean safe caches as JSON\n\n\
          OPTIONS:\n  \
            --include-artifacts        Include project build artifacts in --scan-json\n  \
            --dupes-root <DIR>         Scan DIR for duplicate blobs (repeatable; defaults to AI caches)\n  \
            --min-dupe-mb <MB>         Minimum blob size in MiB for --scan-dupes (default: 4)\n  \
            --trust-cas-names          Use verified sha256-<hex> / blobs/<hex> digests without re-reading\n  \
+           --env-root <DIR>           Scan DIR for orphaned/stale environments (repeatable)\n  \
+           --stale-days <DAYS>        Inactivity threshold in days for --scan-envs (default: 30)\n  \
+           --reclaim-orphans          Reclaim broken/manifest-less orphan envs in --scan-envs\n  \
            --max-reclaimable-gb <GB>  Exit with code 3 if reclaimable/duplicate GiB exceeds threshold\n  \
            --sarif <FILE>             Write OASIS SARIF v2.1.0 report to FILE\n  \
            --dry-run                  Preview safe cache cleanup without deleting (default)\n  \
@@ -434,6 +499,77 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             if let Some(gate) = budget_gate.filter(|_| budget_exceeded) {
                 eprintln!(
                     "slclean duplicate budget exceeded: {:.3} GiB wasted exceeds --max-reclaimable-gb {:.3}",
+                    gate.actual_reclaimable_gb, gate.max_reclaimable_gb
+                );
+                return Ok(EXIT_BUDGET_EXCEEDED);
+            }
+            Ok(0)
+        }
+        CliCommand::ScanEnvs {
+            roots,
+            stale_days,
+            reclaim_orphans,
+            dry_run,
+            to_trash,
+            max_reclaimable_gb,
+            sarif,
+            out,
+        } => {
+            let effective_roots = if roots.is_empty() {
+                env_reclaimer::default_env_roots()
+            } else {
+                roots
+            };
+            let scan = env_reclaimer::scan_environments(
+                &effective_roots,
+                stale_days,
+                &AtomicBool::new(false),
+            );
+            let reclaim_summary = if reclaim_orphans {
+                Some(env_reclaimer::reclaim_environments(
+                    &scan, dry_run, true, to_trash,
+                ))
+            } else {
+                None
+            };
+            let remaining_reclaimable = if let Some(ref sum) = reclaim_summary {
+                if !sum.dry_run {
+                    scan.total_reclaimable_bytes.saturating_sub(sum.freed_bytes)
+                } else {
+                    scan.total_reclaimable_bytes
+                }
+            } else {
+                scan.total_reclaimable_bytes
+            };
+
+            let budget_gate =
+                max_reclaimable_gb.map(|gb| sarif::BudgetGate::evaluate(gb, remaining_reclaimable));
+            let budget_exceeded = budget_gate.as_ref().map(|g| g.exceeded).unwrap_or(false);
+
+            if let Some(sarif_path) = sarif.as_ref() {
+                let sarif_doc = sarif::build_envs_sarif(&scan, budget_gate.as_ref());
+                let sarif_json =
+                    serde_json::to_string_pretty(&sarif_doc).map_err(|e| e.to_string())?;
+                write_file_creating_dirs(sarif_path, &sarif_json)?;
+            }
+
+            let scanned_at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let report = CliEnvsReport {
+                version: env!("CARGO_PKG_VERSION"),
+                scanned_at,
+                budget_gate: budget_gate.clone(),
+                reclaim_summary,
+                scan,
+            };
+            let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+
+            if let Some(gate) = budget_gate.filter(|_| budget_exceeded) {
+                eprintln!(
+                    "slclean environment budget exceeded: {:.3} GiB reclaimable exceeds --max-reclaimable-gb {:.3}",
                     gate.actual_reclaimable_gb, gate.max_reclaimable_gb
                 );
                 return Ok(EXIT_BUDGET_EXCEEDED);
@@ -672,5 +808,57 @@ mod tests {
         assert!(parse_args(&vec_str(&["--scan-json", "--out"])).is_err());
         assert!(parse_args(&vec_str(&["--scan-dupes", "--max-reclaimable-gb", "-1"])).is_err());
         assert!(parse_args(&vec_str(&["--max-reclaimable-gb", "5"])).is_err());
+        assert!(parse_args(&vec_str(&["--scan-envs", "--stale-days", "abc"])).is_err());
+    }
+
+    #[test]
+    fn scan_envs_end_to_end_writes_json_sarif_and_enforces_budget_gate() {
+        let root = std::env::temp_dir().join(format!("slclean-cli-envs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let orphan_nm = root.join("abandoned-app").join("node_modules").join("pkg");
+        std::fs::create_dir_all(&orphan_nm).unwrap();
+        std::fs::write(orphan_nm.join("index.js"), vec![b'z'; 96 * 1024]).unwrap();
+
+        let vhdx = root.join("docker").join("docker_data.vhdx");
+        std::fs::create_dir_all(vhdx.parent().unwrap()).unwrap();
+        std::fs::write(&vhdx, vec![0u8; 64 * 1024]).unwrap();
+
+        let json_out = root.join("out/envs.json");
+        let sarif_out = root.join("out/envs.sarif");
+
+        let parsed = parse_args(&vec_str(&[
+            "--scan-envs",
+            "--env-root",
+            root.to_str().unwrap(),
+            "--stale-days",
+            "14",
+            "--max-reclaimable-gb",
+            "0",
+            "--sarif",
+            sarif_out.to_str().unwrap(),
+            "--out",
+            json_out.to_str().unwrap(),
+        ]))
+        .unwrap()
+        .unwrap();
+
+        let code = execute_command(parsed).unwrap();
+        assert_eq!(code, EXIT_BUDGET_EXCEEDED);
+
+        let json_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&json_out).unwrap()).unwrap();
+        assert_eq!(json_val["orphan_count"].as_u64(), Some(1));
+        assert_eq!(json_val["guarded_vhdx_count"].as_u64(), Some(1));
+        assert_eq!(json_val["budget_gate"]["exceeded"].as_bool(), Some(true));
+
+        let sarif_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&sarif_out).unwrap()).unwrap();
+        let results = sarif_val["runs"][0]["results"].as_array().unwrap();
+        assert!(results.iter().any(|r| r["ruleId"] == "SLC005"));
+        assert!(results.iter().any(|r| r["ruleId"] == "SLC006"));
+        assert!(results.iter().any(|r| r["ruleId"] == "SLC008"));
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

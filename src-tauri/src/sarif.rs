@@ -5,7 +5,7 @@
 //! findings directly to GitHub Code Scanning (`github/codeql-action/upload-sarif`) or fail builds
 //! with exit code `3` when `--max-reclaimable-gb` is exceeded.
 
-use crate::{artifacts, blob_dupes, catalog};
+use crate::{artifacts, blob_dupes, catalog, env_reclaimer};
 use serde::Serialize;
 use std::path::Path;
 
@@ -176,6 +176,30 @@ fn rules_catalog() -> Vec<SarifRule> {
             },
             help_uri: "https://github.com/SalyyS1/SLClean#ci-disk-budget-gate",
         },
+        SarifRule {
+            id: "SLC006",
+            name: "OrphanedOrStaleLanguageEnvironment",
+            short_description: SarifMessage {
+                text: "Orphaned or stale Python virtualenv, Conda environment, or node_modules tree.".into(),
+            },
+            help_uri: "https://github.com/SalyyS1/SLClean#orphaned-environment--container-layer-reclaimer",
+        },
+        SarifRule {
+            id: "SLC007",
+            name: "StaleToolchainBuildTarget",
+            short_description: SarifMessage {
+                text: "Orphaned or inactive Rust Cargo target, Gradle project cache, or CMake build directory.".into(),
+            },
+            help_uri: "https://github.com/SalyyS1/SLClean#orphaned-environment--container-layer-reclaimer",
+        },
+        SarifRule {
+            id: "SLC008",
+            name: "DormantContainerLayerOrGuardedVhdx",
+            short_description: SarifMessage {
+                text: "Dormant container/BuildKit image layer or lock-guarded WSL2/Docker .vhdx virtual disk.".into(),
+            },
+            help_uri: "https://github.com/SalyyS1/SLClean#orphaned-environment--container-layer-reclaimer",
+        },
     ]
 }
 
@@ -268,6 +292,73 @@ pub fn build_scan_sarif(
                 physical_location: SarifPhysicalLocation {
                     artifact_location: SarifArtifactLocation {
                         uri: path_to_uri(&art.path),
+                    },
+                },
+            }],
+            related_locations: None,
+        });
+    }
+
+    SarifLog {
+        schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: vec![SarifRun {
+            tool: SarifTool {
+                driver: SarifDriver {
+                    name: "SLClean",
+                    version: env!("CARGO_PKG_VERSION"),
+                    information_uri: "https://github.com/SalyyS1/SLClean",
+                    rules: rules_catalog(),
+                },
+            },
+            results,
+        }],
+    }
+}
+
+pub fn build_envs_sarif(
+    report: &env_reclaimer::EnvScanReport,
+    budget: Option<&BudgetGate>,
+) -> SarifLog {
+    let mut results = Vec::new();
+
+    if let Some(gate) = budget {
+        if let Some(r) = budget_result(gate) {
+            results.push(r);
+        }
+    }
+
+    for cand in &report.candidates {
+        let level = match cand.status {
+            "broken_interpreter" | "missing_project_manifest" => "warning",
+            "locked_vhdx_guard" => "note",
+            _ => "note",
+        };
+        let detail_part = cand
+            .detail
+            .as_deref()
+            .map(|d| format!(" {d}"))
+            .unwrap_or_default();
+        results.push(SarifResult {
+            rule_id: cand.sarif_rule,
+            level,
+            message: SarifMessage {
+                text: format!(
+                    "{} [{}] occupies {} ({} files, age {:.1}d, priority {:.4}).{} {}",
+                    cand.category,
+                    cand.status,
+                    format_bytes(cand.bytes),
+                    cand.files,
+                    cand.age_days,
+                    cand.priority_score,
+                    detail_part,
+                    cand.remediation
+                ),
+            },
+            locations: vec![SarifLocation {
+                physical_location: SarifPhysicalLocation {
+                    artifact_location: SarifArtifactLocation {
+                        uri: path_to_uri(&cand.path),
                     },
                 },
             }],
