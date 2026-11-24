@@ -212,8 +212,14 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_doctor_sarif",
+            "description": "Export Disk Health Doctor findings (SLC011 critical <5% free, SLC012 warning <15% free, SLC013 low grade) as OASIS SARIF v2.1.0 JSON for GitHub Code Scanning (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
-            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC010).",
+            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC013).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         }
@@ -543,13 +549,27 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_doctor_sarif" => {
+            let doc = disk_health::run_default();
+            let sarif = disk_health::render_doctor_sarif(&doc);
+            tool_outcome(
+                id,
+                json!({
+                    "grade": doc.grade,
+                    "score": doc.score,
+                    "sarif_bytes": sarif.len(),
+                    "sarif": sarif,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010"],
+                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013"],
                     "specs": specs,
                 }),
                 false,
@@ -622,7 +642,17 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 15);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 16);
+
+        let doc_sarif_call = json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_doctor_sarif", "arguments": {} }
+        });
+        let doc_sarif_resp: Value = serde_json::from_str(&handle_message(&doc_sarif_call.to_string()).unwrap()).unwrap();
+        assert_eq!(doc_sarif_resp["result"]["isError"], false);
+        assert!(doc_sarif_resp["result"]["content"][0]["text"].as_str().unwrap().contains("2.1.0"));
 
         let startup_call = json!({
             "jsonrpc": "2.0",
