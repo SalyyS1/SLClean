@@ -280,6 +280,7 @@ function refreshTotals() {
     }
   }
   let checkedBytes = 0, checkedCount = 0, foundBytes = 0, hiddenBytes = 0, hiddenCount = 0, zeroHidden = 0;
+  let safeBytes = 0, rebuildBytes = 0, reviewBytes = 0, artifactBytes = 0;
   for (const it of items.values()) {
     if (it.gone) continue;
     if (it.checked) { checkedBytes += it.bytes; checkedCount++; }
@@ -287,8 +288,20 @@ function refreshTotals() {
     // phải rác, và cộng cả vào sẽ đếm trùng với mục cache chứa nó.
     if (it.group === "leftover" || it.group === "bigfile" || it.group === "dupe") continue;
     foundBytes += it.bytes;
+    if (it.safety === "safe") safeBytes += it.bytes;
+    else if (it.safety === "rebuild") rebuildBytes += it.bytes;
+    else reviewBytes += it.bytes;
+    if (it.group === "artifacts") artifactBytes += it.bytes;
     if (!passesFilter(it) && it.bytes > 0) { hiddenBytes += it.bytes; hiddenCount++; }
     if (it.bytes === 0 && !it.measuring && !it.partial) zeroHidden++;
+  }
+  const strip = $("#overview-strip");
+  if (strip) {
+    strip.innerHTML = `
+      <div class="overview-pill overview-pill--safe"><span class="overview-pill__k">${esc(t("overview.safe"))}</span><span class="overview-pill__v">${fmtBytes(safeBytes)}</span></div>
+      <div class="overview-pill overview-pill--rebuild"><span class="overview-pill__k">${esc(t("overview.rebuild"))}</span><span class="overview-pill__v">${fmtBytes(rebuildBytes)}</span></div>
+      <div class="overview-pill overview-pill--review"><span class="overview-pill__k">${esc(t("overview.review"))}</span><span class="overview-pill__v">${fmtBytes(reviewBytes)}</span></div>
+      <div class="overview-pill"><span class="overview-pill__k">${esc(t("overview.artifacts"))}</span><span class="overview-pill__v">${fmtBytes(artifactBytes)}</span></div>`;
   }
   $("#tally-bytes").textContent = fmtBytes(checkedBytes);
   $("#tally-count").textContent = t(checkedCount === 1 ? "rail.selectedMetaOne" : "rail.selectedMeta", { n: checkedCount });

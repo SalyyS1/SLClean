@@ -44,6 +44,8 @@ function renderSettings() {
   $("#set-trash").checked = !!draft.to_trash;
   const simpleBox = $("#set-simple");
   if (simpleBox) simpleBox.checked = !!draft.simple_mode;
+  const budgetBox = $("#set-budget-gb");
+  if (budgetBox) budgetBox.value = draft.free_space_budget_gb != null ? String(draft.free_space_budget_gb) : "";
 }
 
 async function openSettings() {
@@ -78,6 +80,7 @@ async function saveSettings() {
   if (next !== lang) setLanguage(next);
   $("#to-trash").checked = draft.to_trash;
   document.body.classList.toggle("is-simple", !!draft.simple_mode);
+  if (typeof updateBudgetAlert === "function") updateBudgetAlert(draft.free_space_budget_gb);
   toast(rootsChanged ? t("toast.rescanHint") : t("toast.settingsSaved"));
 }
 
@@ -90,6 +93,12 @@ for (const r of document.querySelectorAll('input[name="lang"]')) {
 $("#set-trash").addEventListener("change", (e) => { draft.to_trash = e.target.checked; });
 if ($("#set-simple")) {
   $("#set-simple").addEventListener("change", (e) => { draft.simple_mode = e.target.checked; });
+}
+if ($("#set-budget-gb")) {
+  $("#set-budget-gb").addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    draft.free_space_budget_gb = e.target.value.trim() && Number.isFinite(val) && val > 0 ? Math.round(val) : null;
+  });
 }
 $("#settings").addEventListener("close", () => {
   if ($("#settings").returnValue === "save") saveSettings().catch((e) => toast(String(e)));

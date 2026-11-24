@@ -113,7 +113,50 @@ function pickLeftovers(mode) {
   refreshTotals();
 }
 
+async function scanHygiene() {
+  const btn = $("#btn-hygiene-scan");
+  if (btn) btn.disabled = true;
+  try {
+    const rep = await invoke("scan_hygiene", { roots: [] });
+    for (const [k, it] of items) if (it.group === "leftover" && it.area === "hygiene") items.delete(k);
+    for (const f of (rep && rep.findings) || []) {
+      const p = String(f.path);
+      const name = p.split(/[\\/]/).filter(Boolean).slice(-1)[0] || p;
+      const isBroken = f.kind === "broken_symlink";
+      items.set(`hyg:${p}`, {
+        id: `hyg:${p}`,
+        group: "leftover",
+        area: "hygiene",
+        label: name,
+        note: f.detail || (isBroken ? "Broken symlink (SLC010)" : "Empty directory (SLC010)"),
+        path: p,
+        paths: [p],
+        bytes: 0,
+        files: 0,
+        safety: "safe",
+        keepRoot: false,
+        needsAdmin: false,
+        checked: false,
+        gone: false,
+        partial: false,
+        age: null,
+        measuring: false,
+        extraTags: [areaTag("hygiene"), `<b class="tag tag--hygiene">${isBroken ? "symlink" : "empty"}</b>`],
+        lastUsed: 0,
+      });
+    }
+    leftFilter = "hygiene";
+    renderAll();
+    toast(t("left.hygieneFound", { e: rep?.empty_dir_count || 0, b: rep?.broken_link_count || 0 }));
+  } catch (err) {
+    toast(String(err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 $("#btn-left-scan").addEventListener("click", scanLeftovers);
+if ($("#btn-hygiene-scan")) $("#btn-hygiene-scan").addEventListener("click", scanHygiene);
 for (const b of document.querySelectorAll("[data-left-filter]")) {
   b.addEventListener("click", () => { leftFilter = b.dataset.leftFilter; renderAll(); });
 }

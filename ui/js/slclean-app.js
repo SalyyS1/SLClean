@@ -8,6 +8,23 @@ const { listen } = window.__TAURI__.event;
 const { revealItemInDir } = window.__TAURI__.opener;
 
 let drives = [];
+let freeSpaceBudgetGb = null;
+
+function updateBudgetAlert(budgetGb) {
+  if (budgetGb !== undefined) freeSpaceBudgetGb = budgetGb;
+  const el = $("#budget-alert");
+  if (!el) return;
+  if (!freeSpaceBudgetGb || freeSpaceBudgetGb <= 0) {
+    el.hidden = true;
+    return;
+  }
+  const thresholdBytes = freeSpaceBudgetGb * 1024 * 1024 * 1024;
+  const low = drives.filter((d) => d.free < thresholdBytes).map((d) => d.mount);
+  el.hidden = low.length === 0;
+  if (low.length) {
+    el.textContent = t("rail.budgetWarn", { drives: low.join(", "), gb: freeSpaceBudgetGb });
+  }
+}
 
 // ---------- Ngôn ngữ ----------
 function setLanguage(next) {
@@ -54,6 +71,7 @@ async function loadDrives() {
     ul.appendChild(li);
   }
   paintGains();
+  updateBudgetAlert();
 }
 
 /** Vạch hổ phách trên thanh ổ đĩa = tổng các mục đã tick nằm trên ổ đó. */
@@ -425,6 +443,7 @@ for (const gc of document.querySelectorAll("[data-group-check]")) {
     const s = await invoke("get_settings");
     $("#to-trash").checked = !!s.to_trash;
     document.body.classList.toggle("is-simple", !!s.simple_mode);
+    freeSpaceBudgetGb = s.free_space_budget_gb ?? null;
   } catch { /* mặc định xoá thẳng */ }
   switchTab(activeTab);
   if (activeTab !== "clean") tabShown.add("clean");
