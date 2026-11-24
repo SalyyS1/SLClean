@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, catalog_specs, dead_links, drives, ledger, project_roots, projects};
+use crate::{artifacts, blob_dupes, catalog_specs, dead_links, drives, ledger, project_roots, projects};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -76,6 +76,21 @@ fn tool_definitions() -> Value {
                 "properties": {
                     "roots": { "type": "array", "items": { "type": "string" } },
                     "max_depth": { "type": "integer", "minimum": 1, "maximum": 12, "default": 5 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_scan_dupes",
+            "description": "Detect byte-identical duplicate AI model weights (.safetensors, .gguf, .bin) and large blobs across directories with zero-read CAS fastpath (SLC004, read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "min_mb": { "type": "number", "minimum": 0.1, "default": 10.0 },
+                    "trust_cas_names": { "type": "boolean", "default": true }
                 },
                 "required": ["roots"],
                 "additionalProperties": false
@@ -185,6 +200,29 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
             let report = dead_links::scan(&roots, max_depth);
             tool_outcome(id, serde_json::to_value(&report).unwrap_or_else(|_| json!({})), false)
         }
+        "slclean_scan_dupes" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let min_mb = args
+                .and_then(|a| a.get("min_mb"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(10.0)
+                .max(0.001);
+            let min_bytes = (min_mb * 1024.0 * 1024.0).round() as u64;
+            let trust_cas = args
+                .and_then(|a| a.get("trust_cas_names"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let cancel = AtomicBool::new(false);
+            let report = blob_dupes::scan_blobs(&roots, min_bytes, trust_cas, &cancel);
+            tool_outcome(id, serde_json::to_value(&report).unwrap_or_else(|_| json!({})), false)
+        }
         "slclean_ledger_summary" => {
             let l = ledger::load_default();
             let summary = l.summary();
@@ -277,7 +315,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 5);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 6);
 
         let dir = std::env::temp_dir().join("slclean_mcp_hygiene_test");
         let _ = std::fs::remove_dir_all(&dir);
