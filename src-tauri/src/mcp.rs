@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, history, ledger, project_roots, projects};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -116,6 +116,20 @@ fn tool_definitions() -> Value {
             "name": "slclean_ledger_summary",
             "description": "Inspect SLClean's persistent Clean Run Ledger summary (lifetime reclaimed bytes, total runs, Recycle Bin vs Permanent counts, recent runs).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_scan_envs",
+            "description": "Scan directories for orphaned Python virtualenvs, manifest-less node_modules, stale Cargo/Gradle targets, and guarded WSL2/Docker .vhdx virtual disks (SLC006-SLC008, read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 1, "default": 30 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
             "annotations": { "readOnlyHint": true }
         },
         {
@@ -301,6 +315,23 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_scan_envs" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let stale_days = args
+                .and_then(|a| a.get("stale_days"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(env_reclaimer::DEFAULT_STALE_DAYS);
+            let cancel = AtomicBool::new(false);
+            let report = env_reclaimer::scan_environments(&roots, stale_days, &cancel);
+            tool_outcome(id, serde_json::to_value(&report).unwrap_or_else(|_| json!({})), false)
+        }
         "slclean_history_diff" => {
             let hist = history::load_default();
             let count = hist.snapshots.len();
@@ -402,7 +433,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 9);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
 
         let dir = std::env::temp_dir().join("slclean_mcp_hygiene_test");
         let _ = std::fs::remove_dir_all(&dir);
