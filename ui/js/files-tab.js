@@ -73,7 +73,11 @@ function renderBigCrumbs() {
     b.className = "crumbs__item";
     b.textContent = label;
     b.disabled = node === bigAt;
-    b.addEventListener("click", () => { bigAt = node; renderBigMap(); });
+    b.addEventListener("click", () => {
+      bigAt = node;
+      if (bigView === "treemap") renderBigTreemap();
+      else renderBigMap();
+    });
     nav.appendChild(b);
   };
   crumb(t("big.allDrives"), null);
@@ -95,14 +99,86 @@ function renderBigMap() {
   $("#big-empty").textContent = t("big.emptyMap");
 }
 
-/** Đổi giữa danh sách file và bản đồ thư mục. */
+/** Recursive proportional treemap partitioning in percentage space (0..100%). */
+function layoutTreemap(nodes, x, y, w, h, out) {
+  if (!nodes.length || w <= 0 || h <= 0) return;
+  if (nodes.length === 1) {
+    out.push({ node: nodes[0], x, y, w, h });
+    return;
+  }
+  const total = nodes.reduce((s, n) => s + Math.max(1, n.bytes), 0);
+  let acc = 0;
+  let split = 1;
+  for (let i = 0; i < nodes.length - 1; i++) {
+    acc += Math.max(1, nodes[i].bytes);
+    split = i + 1;
+    if (acc >= total * 0.5) break;
+  }
+  const left = nodes.slice(0, split);
+  const right = nodes.slice(split);
+  const ratio = left.reduce((s, n) => s + Math.max(1, n.bytes), 0) / total;
+  if (w >= h) {
+    const lw = w * ratio;
+    layoutTreemap(left, x, y, lw, h, out);
+    layoutTreemap(right, x + lw, y, w - lw, h, out);
+  } else {
+    const lh = h * ratio;
+    layoutTreemap(left, x, y, w, lh, out);
+    layoutTreemap(right, x, y + lh, w, h - lh, out);
+  }
+}
+
+function renderBigTreemap() {
+  const host = $("#big-treemap");
+  if (!host) return;
+  host.innerHTML = "";
+  const nodes = [...bigMapNodes()].filter((n) => n.bytes > 0).sort((a, b) => b.bytes - a.bytes);
+  renderBigCrumbs();
+  $("#big-empty").hidden = nodes.length > 0 || bigScanning;
+  $("#big-empty").textContent = t("big.emptyMap");
+  if (!nodes.length) return;
+  const total = nodes.reduce((s, n) => s + n.bytes, 0) || 1;
+  // Cap to top 24 visible tiles so tiny 0.1% slices remain legible; fold remainder into last tile if needed.
+  const visible = nodes.slice(0, 24);
+  const rects = [];
+  layoutTreemap(visible, 0, 0, 100, 100, rects);
+  rects.forEach((r, idx) => {
+    const node = r.node;
+    const hasChildren = node.children && node.children.length > 0;
+    const name = String(node.path).replace(/\\$/, "").split("\\").filter(Boolean).slice(-1)[0] || node.path;
+    const pct = ((node.bytes / total) * 100).toFixed(1);
+    const tile = document.createElement(hasChildren ? "button" : "div");
+    if (hasChildren) tile.type = "button";
+    tile.className = `treemap__tile treemap__tile--t${idx % 6}${hasChildren ? " treemap__tile--into" : ""}`;
+    tile.style.left = `${r.x.toFixed(3)}%`;
+    tile.style.top = `${r.y.toFixed(3)}%`;
+    tile.style.width = `${r.w.toFixed(3)}%`;
+    tile.style.height = `${r.h.toFixed(3)}%`;
+    tile.title = `${node.path}\n${fmtBytes(node.bytes)} (${pct}%) · ${t("big.fileCount", { n: node.files })}`;
+    if (r.w >= 8 && r.h >= 12) {
+      tile.innerHTML = `<span class="treemap__name">${esc(name)}</span><span class="treemap__meta">${fmtBytes(node.bytes)} · ${pct}%</span>`;
+    } else if (r.w >= 5 && r.h >= 8) {
+      tile.innerHTML = `<span class="treemap__meta">${esc(name)}</span>`;
+    }
+    if (hasChildren) {
+      tile.addEventListener("click", () => { bigAt = node; renderBigTreemap(); });
+    }
+    host.appendChild(tile);
+  });
+}
+
+/** Đổi giữa danh sách file, bản đồ thư mục và bản đồ khối treemap. */
 function renderBigView() {
+  const isList = bigView === "list";
   const isMap = bigView === "map";
-  $("#big-list").hidden = isMap;
+  const isTree = bigView === "treemap";
+  $("#big-list").hidden = !isList;
   $("#big-map").hidden = !isMap;
-  $("#big-crumbs").hidden = !isMap;
+  if ($("#big-treemap")) $("#big-treemap").hidden = !isTree;
+  $("#big-crumbs").hidden = isList;
   for (const b of document.querySelectorAll("[data-big-view]")) b.classList.toggle("is-active", b.dataset.bigView === bigView);
   if (isMap) renderBigMap();
+  else if (isTree) renderBigTreemap();
   else renderAll();
 }
 

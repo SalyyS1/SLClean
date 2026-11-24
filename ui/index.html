@@ -116,6 +116,8 @@
       <div class="board__tools">
         <button class="btn btn--amber" id="btn-quick" data-i18n="hero.quickSafe">Dọn nhanh phần an toàn</button>
         <button class="btn btn--line" id="btn-scan" data-i18n="board.rescan">Quét lại</button>
+        <button class="btn btn--ghost" id="btn-export-html" data-i18n="export.html" title="Export self-contained HTML audit report">Xuất HTML</button>
+        <button class="btn btn--ghost" id="btn-export-csv" data-i18n="export.csv" title="Export CSV report">Xuất CSV</button>
         <button class="btn btn--ghost" id="btn-cancel" hidden data-i18n="board.stop">Dừng</button>
       </div>
     </header>
@@ -128,6 +130,7 @@
       <div class="quick" role="group" data-i18n-aria="view.size">
         <button class="quick__btn" data-view="size" data-i18n="view.size">Lớn nhất trước</button>
         <button class="quick__btn" data-view="group" data-i18n="view.group">Theo nhóm</button>
+        <button class="quick__btn" data-view="projects" data-i18n="view.projects">Theo dự án</button>
       </div>
       <div class="quick" role="group" data-i18n-aria="filter.all">
         <button class="quick__btn" data-filter="all" data-i18n="filter.all">Tất cả</button>
@@ -152,6 +155,17 @@
         </header>
         <ol class="rows" id="rows-flat"></ol>
         <p class="group__empty" id="empty-flat" hidden data-i18n="flat.empty">Không có mục nào khớp.</p>
+      </section>
+
+      <section class="group" id="projects-view" hidden>
+        <header class="group__head">
+          <span class="proj-icon" aria-hidden="true">◆</span>
+          <h3 class="group__name" data-i18n="proj.heading">Artifact gom theo dự án (.git)</h3>
+          <span class="group__hint" data-i18n="proj.hint">nhận diện dự án lâu không chạm để dọn build artifact</span>
+          <span class="group__size mono" id="projects-total">—</span>
+        </header>
+        <div class="proj-grid" id="rows-projects"></div>
+        <p class="group__empty" id="empty-projects" hidden data-i18n="proj.empty">Không tìm thấy artifact dự án nào.</p>
       </section>
 
       <section class="group" data-group="artifacts">
@@ -356,6 +370,7 @@
       <div class="quick" role="group">
         <button class="quick__btn is-active" data-big-view="list" data-i18n="big.viewList">Danh sách file</button>
         <button class="quick__btn" data-big-view="map" data-i18n="big.viewMap">Theo thư mục</button>
+        <button class="quick__btn" data-big-view="treemap" data-i18n="big.viewTreemap">Bản đồ khối</button>
       </div>
       <label class="hist__pick" for="big-threshold">
         <span data-i18n="big.threshold">Từ cỡ</span>
@@ -372,6 +387,7 @@
     <div class="board__scroll" id="big-board">
       <ol class="rows" id="big-list"></ol>
       <nav class="crumbs" id="big-crumbs" hidden></nav>
+      <div class="treemap" id="big-treemap" hidden aria-label="Disk treemap"></div>
       <ol class="drift" id="big-map" hidden></ol>
       <p class="group__empty" id="big-empty" hidden></p>
       <p class="board__note" data-i18n="big.note"></p>
@@ -478,6 +494,15 @@
     </div>
 
     <div class="board__scroll" id="hist-board">
+      <section class="ledger-card" id="ledger-section">
+        <header class="ledger-card__head">
+          <h3 class="ledger-card__title" data-i18n="ledger.title">Sổ nhật ký dọn dẹp (Clean Run Ledger)</h3>
+          <span class="ledger-card__sub" id="ledger-summary-line">—</span>
+        </header>
+        <div class="ledger-stats" id="ledger-stats"></div>
+        <ol class="ledger-list" id="ledger-runs"></ol>
+        <p class="group__empty" id="ledger-empty" hidden data-i18n="ledger.empty">Chưa có lượt dọn nào được ghi lại.</p>
+      </section>
       <ul class="drift" id="hist-drives"></ul>
       <ol class="drift" id="hist-list"></ol>
       <p class="group__empty" id="hist-empty" hidden></p>

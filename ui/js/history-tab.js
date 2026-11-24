@@ -9,6 +9,9 @@ let histFilter = "all";
 let histLoading = false;
 /** Đã nạp nhật ký lần nào chưa; trước đó tab chỉ có chuỗi tĩnh nên không cần vẽ lại. */
 let histLoaded = false;
+/** Clean Run Ledger (lịch sử dọn dẹp & tổng dung lượng đã giải phóng). */
+let cleanLedger = { runs: [] };
+let cleanSummary = null;
 
 function histPasses(c) {
   switch (histFilter) {
@@ -68,7 +71,51 @@ function histDriveRow(d) {
   return li;
 }
 
+function renderCleanLedger() {
+  const statsEl = $("#ledger-stats");
+  const runsEl = $("#ledger-runs");
+  const sumEl = $("#ledger-summary-line");
+  const emptyEl = $("#ledger-empty");
+  if (!statsEl || !runsEl) return;
+  const s = cleanSummary || { total_runs: 0, lifetime_freed_bytes: 0, trash_runs: 0, permanent_runs: 0 };
+  if (sumEl) sumEl.textContent = t("ledger.summaryLine", { runs: s.total_runs, freed: fmtBytes(s.lifetime_freed_bytes) });
+  statsEl.innerHTML = `
+    <div class="ledger-stat"><div class="ledger-stat__k">${esc(t("ledger.lifetimeFreed"))}</div><div class="ledger-stat__v">${fmtBytes(s.lifetime_freed_bytes)}</div></div>
+    <div class="ledger-stat"><div class="ledger-stat__k">${esc(t("ledger.totalRuns"))}</div><div class="ledger-stat__v">${s.total_runs}</div></div>
+    <div class="ledger-stat"><div class="ledger-stat__k">${esc(t("ledger.trashRuns"))}</div><div class="ledger-stat__v">${s.trash_runs}</div></div>
+    <div class="ledger-stat"><div class="ledger-stat__k">${esc(t("ledger.permRuns"))}</div><div class="ledger-stat__v">${s.permanent_runs}</div></div>`;
+  runsEl.innerHTML = "";
+  const runs = (cleanLedger && Array.isArray(cleanLedger.runs) ? cleanLedger.runs : []).slice(-10).reverse();
+  if (emptyEl) emptyEl.hidden = runs.length > 0;
+  for (const r of runs) {
+    const li = document.createElement("li");
+    li.className = "ledger-row";
+    const modeTag = r.to_trash
+      ? `<b class="tag tag--git">${esc(t("ledger.modeTrash"))}</b>`
+      : `<b class="tag tag--review">${esc(t("ledger.modePerm"))}</b>`;
+    li.innerHTML = `
+      <span class="ledger-row__time">${fmtStamp(r.timestamp)}</span>
+      <span class="ledger-row__meta">${esc(t("ledger.itemsCount", { n: (r.items || []).length, r: r.total_removed || 0 }))} · ${esc(r.source || "gui")}</span>
+      ${modeTag}
+      <span class="ledger-row__freed">${fmtBytes(r.total_freed || 0)}</span>`;
+    runsEl.appendChild(li);
+  }
+}
+
+async function loadCleanLedger() {
+  try {
+    const [ledger, summary] = await Promise.all([invoke("list_clean_ledger"), invoke("clean_ledger_summary")]);
+    cleanLedger = ledger || { runs: [] };
+    cleanSummary = summary || null;
+  } catch {
+    cleanLedger = { runs: [] };
+    cleanSummary = null;
+  }
+  renderCleanLedger();
+}
+
 function renderHistory() {
+  renderCleanLedger();
   if (!histLoaded && !histLoading) return;
   const list = $("#hist-list");
   const drives = $("#hist-drives");
@@ -146,7 +193,7 @@ async function loadHistory() {
   histLoaded = true;
   renderHistPicker();
   setTabBadge("history", 0);
-  await loadHistoryDiff();
+  await Promise.all([loadHistoryDiff(), loadCleanLedger()]);
 }
 
 /** Ghi một mốc sau khi quét xong trọn vẹn. Gọi từ slclean-app.js, lỗi thì im lặng bỏ qua. */

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SLClean v0.7.0 - Windows AI &amp; Developer Cache Explorer, Project Reclaimer &amp; Clean Ledger</title>
-  <meta name="description" content="Interactive rule explorer, AI cache footprint estimator, project-centric .git staleness reclaimer (SLC009), hygiene scanner (SLC010), Clean Run Ledger, HTML/CSV exporter, and CI disk-budget calculator for SLClean v0.7.0." />
+  <title>SLClean v0.8.0 - Windows AI &amp; Developer Cache Explorer, Squarified Treemap, Project Reclaimer &amp; Clean Ledger</title>
+  <meta name="description" content="Interactive rule explorer, Squarified Disk Treemap, AI cache footprint estimator, project-centric .git staleness reclaimer (SLC009), hygiene scanner (SLC010), Clean Run Ledger, HTML/CSV exporter, and CI disk-budget calculator for SLClean v0.8.0." />
   <style>
     :root {
       --bg: #0f1411;
@@ -299,10 +299,10 @@
 <body>
   <div class="wrap">
     <header>
-      <span class="eyebrow">SLClean v0.6.0 | Rust + Tauri 2 | Zero Telemetry</span>
-      <h1>Windows AI, Environment &amp; Developer Cache Footprint Explorer</h1>
+      <span class="eyebrow">SLClean v0.8.0 | Rust + Tauri 2 | Treemap · By-Project · Clean Ledger · Zero Telemetry</span>
+      <h1>Windows AI, Project Artifact &amp; Developer Cache Footprint Explorer</h1>
       <p class="lead">
-        Inspect every cache rule, orphaned Python/Node/Rust environment reclaimer (SLC006-SLC008), duplicate AI weight blob analyzer, and path-protection guard built into SLClean before installing. Toggle your active toolchains below to estimate reclaimable disk bloat.
+        Inspect every cache rule, interactive Squarified Disk Treemap, project-centric <code>.git</code> staleness reclaimer (SLC009), empty-dir &amp; dead-symlink hygiene scanner (SLC010), Clean Run Ledger audit trail, HTML/CSV exporter, and path-protection guard built into SLClean v0.8.0.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/SalyyS1/SLClean/releases/latest">Download Windows Installer &amp; Portable .exe</a>
@@ -314,7 +314,7 @@
       <div class="stat-card">
         <div class="stat-label">Detection Rules</div>
         <div class="stat-value">105+</div>
-        <div class="stat-sub">Static specs + dynamic browser/IDE discovery</div>
+        <div class="stat-sub">Static specs + dynamic browser/IDE + .git projects</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Estimated Reclaimable</div>
@@ -322,15 +322,22 @@
         <div class="stat-sub" id="est-breakdown">Select your stacks below</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">VHDX &amp; OS Guards</div>
-        <div class="stat-value">Locked</div>
-        <div class="stat-sub">Protects WSL2 ext4.vhdx, Docker, .ssh, pagefile</div>
+        <div class="stat-label">Visual Treemap &amp; Ledger</div>
+        <div class="stat-value">v0.8.0</div>
+        <div class="stat-sub">Squarified Treemap + Clean Run Ledger + HTML/CSV</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Headless CLI &amp; CI Action</div>
-        <div class="stat-value">--scan-envs</div>
-        <div class="stat-sub">SLC001-SLC008 SARIF v2.1.0 &amp; action.yml</div>
+        <div class="stat-value">SLC001-010</div>
+        <div class="stat-sub">--scan-projects, --scan-hygiene, --ledger, SARIF</div>
       </div>
+    </section>
+
+    <section class="estimator" style="margin-bottom: 24px;">
+      <h2>0. Live Squarified Disk Treemap Preview (New in v0.8.0)</h2>
+      <p class="sub">Proportional visual map of a typical AI + Rust + Minecraft developer workstation. Click any tile to inspect its reclaimable category and safety contract.</p>
+      <div id="demo-treemap" style="position:relative;width:100%;height:240px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#0a0e0c;margin-bottom:10px;"></div>
+      <div id="demo-treemap-info" style="font-family:var(--mono);font-size:12.5px;color:var(--muted);">Click a treemap tile to inspect reclaim safety and CLI command.</div>
     </section>
 
     <section class="estimator">
@@ -719,6 +726,51 @@
     }
     staleSlider.addEventListener("input", renderEnvReclaimer);
 
+    const TREEMAP_DEMO = [
+      { name: "HuggingFace + Ollama Weights", gb: 28.4, safety: "review", color: "rgba(251,191,36,0.28)", cmd: "SLClean --scan-dupes --trust-cas-names" },
+      { name: "Rust target/ (stale .git repos)", gb: 18.2, safety: "rebuild", color: "rgba(56,189,248,0.28)", cmd: "SLClean --scan-projects --stale-days 30" },
+      { name: "Docker & WSL2 ext4.vhdx (Locked)", gb: 14.5, safety: "locked", color: "rgba(248,113,113,0.24)", cmd: "Protected by SLC004/SLC008 VHDX guard" },
+      { name: "Windows Update + Temp + Browser", gb: 9.8, safety: "safe", color: "rgba(74,222,128,0.28)", cmd: "SLClean --scan-json --report-html audit.html" },
+      { name: "Gradle / Maven / Minecraft Caches", gb: 7.6, safety: "rebuild", color: "rgba(167,139,250,0.26)", cmd: "SLClean --scan-projects --report-csv audit.csv" },
+      { name: "node_modules + .venv orphans", gb: 6.4, safety: "rebuild", color: "rgba(45,212,191,0.24)", cmd: "SLClean --scan-envs --stale-days 30" },
+    ];
+    function partitionTreemap(items, x, y, w, h, out) {
+      if (!items.length) return;
+      if (items.length === 1) { out.push({ item: items[0], x, y, w, h }); return; }
+      const total = items.reduce((s, it) => s + it.gb, 0);
+      let acc = 0, split = 1;
+      for (let i = 0; i < items.length - 1; i++) { acc += items[i].gb; split = i + 1; if (acc >= total * 0.5) break; }
+      const left = items.slice(0, split), right = items.slice(split);
+      const ratio = left.reduce((s, it) => s + it.gb, 0) / total;
+      if (w >= h) {
+        partitionTreemap(left, x, y, w * ratio, h, out);
+        partitionTreemap(right, x + w * ratio, y, w * (1 - ratio), h, out);
+      } else {
+        partitionTreemap(left, x, y, w, h * ratio, out);
+        partitionTreemap(right, x, y + h * ratio, w, h * (1 - ratio), out);
+      }
+    }
+    function renderDemoTreemap() {
+      const host = document.getElementById("demo-treemap");
+      const info = document.getElementById("demo-treemap-info");
+      if (!host) return;
+      const total = TREEMAP_DEMO.reduce((s, i) => s + i.gb, 0);
+      const rects = [];
+      partitionTreemap(TREEMAP_DEMO, 0, 0, 100, 100, rects);
+      host.innerHTML = "";
+      for (const r of rects) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.style.cssText = `position:absolute;left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;background:${r.item.color};border:1px solid #0a0e0c;color:#e6efe9;padding:8px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;font-family:inherit;`;
+        const pct = ((r.item.gb / total) * 100).toFixed(1);
+        btn.innerHTML = `<span style="font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.item.name}</span><span style="font-family:var(--mono);font-size:11.5px;color:#c5d8cc">${r.item.gb.toFixed(1)} GB (${pct}%)</span>`;
+        btn.addEventListener("click", () => {
+          info.textContent = `${r.item.name} — ${r.item.gb.toFixed(1)} GB [${r.item.safety}] -> ${r.item.cmd}`;
+        });
+        host.appendChild(btn);
+      }
+    }
+    renderDemoTreemap();
     renderEstimator();
     renderAiCalculator();
     renderEnvReclaimer();

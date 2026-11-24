@@ -138,7 +138,7 @@ async function scan() {
     $("#empty-artifacts").hidden = true;
     const projName = a.project.split("\\").filter(Boolean).slice(-1)[0];
     upsert({
-      id: `art:${a.path}`, group: "artifacts", label: `${projName} \\ ${a.kind}`, note: a.tool, path: a.path, paths: [a.path],
+      id: `art:${a.path}`, group: "artifacts", project: a.project, label: `${projName} \\ ${a.kind}`, note: a.tool, path: a.path, paths: [a.path],
       bytes: a.bytes, files: a.files, safety: "rebuild", keepRoot: false, needsAdmin: false,
       checked: false, gone: false, partial: false, age: a.modified, measuring: false,
     });
@@ -268,7 +268,53 @@ async function runClean() {
     $("#progress-close").hidden = false;
     loadDrives();
     loadRecycle();
+    if (typeof loadCleanLedger === "function") loadCleanLedger();
   }
+}
+
+// ---------- Xuất báo cáo kiểm toán (HTML / CSV) & Metadata Dự án ----------
+async function loadProjectMeta() {
+  try {
+    const rep = await invoke("scan_projects", { staleDays: 30 });
+    projectMeta.clear();
+    for (const p of (rep && rep.projects) || []) {
+      projectMeta.set(String(p.project).toLowerCase(), p);
+    }
+    if (view === "projects") renderProjectsView();
+  } catch { /* môi trường giả lập hoặc bản cũ không có scan_projects */ }
+}
+
+function downloadBlob(filename, mime, content) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportAuditReport(format) {
+  const fmt = format === "csv" ? "csv" : "html";
+  const rows = [...items.values()]
+    .filter((i) => !i.gone && i.bytes > 0 && i.group !== "bigfile" && i.group !== "dupe")
+    .sort((a, b) => b.bytes - a.bytes);
+  if (fmt === "csv") {
+    const csvEscape = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+    const lines = ["id,group,safety,bytes,files,label,path"];
+    for (const it of rows) {
+      lines.push([it.id, it.group, it.safety, it.bytes, it.files || 0, L(it.label), it.path].map(csvEscape).join(","));
+    }
+    downloadBlob("slclean-audit-report.csv", "text/csv;charset=utf-8", lines.join("\n"));
+  } else {
+    const total = rows.reduce((s, i) => s + i.bytes, 0);
+    const trs = rows.map((it) => `<tr><td>${esc(L(it.label))}</td><td>${esc(it.group)}</td><td>${esc(it.safety)}</td><td style="text-align:right;font-family:monospace">${fmtBytes(it.bytes)}</td><td style="font-family:monospace">${esc(it.path)}</td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>SLClean Audit Report</title><style>body{font-family:system-ui,sans-serif;background:#101512;color:#e6efe9;padding:24px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #2a3730;padding:8px 10px;text-align:left;font-size:13px}th{color:#93a89b;text-transform:uppercase;font-size:11px}</style></head><body><h1>SLClean Audit Report</h1><p>Total reclaimable: <b>${fmtBytes(total)}</b> across ${rows.length} items.</p><table><thead><tr><th>Item</th><th>Group</th><th>Safety</th><th>Size</th><th>Path</th></tr></thead><tbody>${trs}</tbody></table></body></html>`;
+    downloadBlob("slclean-audit-report.html", "text/html;charset=utf-8", html);
+  }
+  toast(t("export.downloaded", { fmt: fmt.toUpperCase() }));
 }
 
 // ---------- Toast ----------
@@ -334,8 +380,16 @@ function syncViewButtons() {
   for (const b of document.querySelectorAll("[data-filter]")) b.classList.toggle("is-active", b.dataset.filter === filter);
 }
 for (const b of document.querySelectorAll("[data-view]")) {
-  b.addEventListener("click", () => { view = b.dataset.view; localStorage.setItem("slclean-view", view); syncViewButtons(); renderAll(); });
+  b.addEventListener("click", () => {
+    view = b.dataset.view;
+    localStorage.setItem("slclean-view", view);
+    syncViewButtons();
+    renderAll();
+    if (view === "projects" && projectMeta.size === 0) loadProjectMeta();
+  });
 }
+if ($("#btn-export-html")) $("#btn-export-html").addEventListener("click", () => exportAuditReport("html"));
+if ($("#btn-export-csv")) $("#btn-export-csv").addEventListener("click", () => exportAuditReport("csv"));
 for (const b of document.querySelectorAll("[data-filter]")) {
   b.addEventListener("click", () => { filter = b.dataset.filter; localStorage.setItem("slclean-filter", filter); syncViewButtons(); renderAll(); });
 }
@@ -370,6 +424,7 @@ for (const gc of document.querySelectorAll("[data-group-check]")) {
   try {
     const s = await invoke("get_settings");
     $("#to-trash").checked = !!s.to_trash;
+    document.body.classList.toggle("is-simple", !!s.simple_mode);
   } catch { /* mặc định xoá thẳng */ }
   switchTab(activeTab);
   if (activeTab !== "clean") tabShown.add("clean");

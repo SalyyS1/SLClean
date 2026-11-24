@@ -20,8 +20,10 @@ let dupScanning = false;
 /** App có đang chạy với quyền admin không; set một lần lúc khởi động. */
 let elevated = false;
 
-/** Cách xem: "size" (mọi mục, lớn nhất trước) hoặc "group" (theo nhóm). */
+/** Cách xem: "size" (mọi mục, lớn nhất trước), "group" (theo nhóm), hoặc "projects" (theo dự án). */
 let view = localStorage.getItem("slclean-view") || "size";
+/** Metadata độ cũ `.git` từ lệnh `scan_projects` (key = đường dẫn project viết thường). */
+const projectMeta = new Map();
 /** Bộ lọc an toàn: "all" | "safe" | "safe-rebuild". */
 let filter = localStorage.getItem("slclean-filter") || "all";
 /** Chuỗi tìm kiếm (chữ thường); rỗng = không lọc. */
@@ -62,6 +64,7 @@ function unselectable(it) {
 function containerFor(it) {
   if (it.group === "leftover") return $("#left-list");
   if (it.group === "bigfile") return $("#big-list");
+  if (view === "projects") return $("#rows-artifacts");
   return view === "size" ? $("#rows-flat") : $(`#rows-${it.group}`);
 }
 
@@ -149,10 +152,77 @@ function updateMeasuring(id, bytes, files) {
   if (li) li.querySelector(".row__size").textContent = sizeText(it);
 }
 
+function renderProjectsView() {
+  const host = $("#rows-projects");
+  if (!host) return;
+  host.innerHTML = "";
+  const grouped = new Map();
+  let grandTotal = 0;
+  for (const it of items.values()) {
+    if (it.group !== "artifacts" || it.gone) continue;
+    if (!passesFilter(it)) continue;
+    const proj = it.project || String(it.path).replace(/[\\/][^\\/]+$/, "");
+    const key = proj.toLowerCase();
+    if (!grouped.has(key)) {
+      const name = proj.split(/[\\/]/).filter(Boolean).slice(-1)[0] || proj;
+      grouped.set(key, { key, project: proj, name, bytes: 0, items: [] });
+    }
+    const g = grouped.get(key);
+    g.bytes += it.bytes;
+    g.items.push(it);
+    grandTotal += it.bytes;
+  }
+  const list = [...grouped.values()].sort((a, b) => b.bytes - a.bytes);
+  $("#projects-total").textContent = list.length ? fmtBytes(grandTotal) : "—";
+  $("#empty-projects").hidden = list.length > 0 || scanning;
+  for (const g of list) {
+    const meta = projectMeta.get(g.key);
+    const isGit = meta ? !!meta.is_git_repo : false;
+    const staleDays = meta ? meta.inactive_days : null;
+    const isStale = meta ? !!meta.stale : false;
+    const card = document.createElement("article");
+    card.className = `proj-card${isStale ? " proj-card--stale" : ""}`;
+    const selectable = g.items.filter((i) => !unselectable(i));
+    const selectedCount = selectable.filter((i) => i.checked).length;
+    const badges = [];
+    if (isGit) badges.push(`<b class="tag tag--git">${t("proj.git")}</b>`);
+    if (staleDays != null) {
+      badges.push(isStale
+        ? `<b class="tag tag--stale">${t("proj.staleDays", { d: staleDays })}</b>`
+        : `<b class="tag tag--rebuild">${t("proj.activeDays", { d: staleDays })}</b>`);
+    }
+    card.innerHTML = `
+      <header class="proj-card__head">
+        <div class="proj-card__left">
+          <label class="check"><input type="checkbox" class="proj-card__check" ${selectable.length > 0 && selectedCount === selectable.length ? "checked" : ""} ${selectable.length === 0 ? "disabled" : ""}><span class="check__box"></span></label>
+          <div style="min-width:0">
+            <div class="proj-card__title">${esc(g.name)} ${badges.join("")}</div>
+            <div class="proj-card__path" title="${esc(g.project)}">${esc(shortPath(g.project))} · ${t("proj.artifactsCount", { n: g.items.length })}</div>
+          </div>
+        </div>
+        <span class="proj-card__size">${fmtBytes(g.bytes)}</span>
+      </header>
+      <ol class="proj-card__rows"></ol>`;
+    const chk = card.querySelector(".proj-card__check");
+    chk.indeterminate = selectedCount > 0 && selectedCount < selectable.length;
+    chk.addEventListener("change", () => {
+      for (const it of selectable) it.checked = chk.checked;
+      renderProjectsView();
+      refreshTotals();
+    });
+    const ol = card.querySelector(".proj-card__rows");
+    for (const it of g.items.sort((a, b) => b.bytes - a.bytes)) {
+      ol.appendChild(rowFor(it));
+    }
+    host.appendChild(card);
+  }
+}
+
 /** Vẽ lại toàn bộ (khi đổi cách xem / bộ lọc / tìm kiếm / ngôn ngữ / trạng thái admin). */
 function renderAll() {
   $("#flat-view").hidden = view !== "size";
-  for (const sec of document.querySelectorAll(".group[data-group]")) sec.hidden = view === "size";
+  if ($("#projects-view")) $("#projects-view").hidden = view !== "projects";
+  for (const sec of document.querySelectorAll(".group[data-group]")) sec.hidden = view !== "group";
   $("#rows-flat").innerHTML = "";
   for (const g of GROUPS) $(`#rows-${g}`).innerHTML = "";
   $("#left-list").innerHTML = "";
@@ -164,9 +234,12 @@ function renderAll() {
     // riêng của nó, không phải thành hàng rời trong sổ cái.
     if (it.group === "dupe") continue;
     if (!passesFilter(it)) continue;
-    containerFor(it).appendChild(rowFor(it));
+    if (view !== "projects" || it.group === "leftover" || it.group === "bigfile") {
+      containerFor(it).appendChild(rowFor(it));
+    }
     if (it.group !== "leftover" && it.group !== "bigfile") shown++;
   }
+  if (view === "projects") renderProjectsView();
   $("#empty-flat").hidden = view !== "size" || shown > 0 || scanning;
   refreshTotals();
 }

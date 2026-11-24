@@ -23,13 +23,13 @@ Grab the latest build from [GitHub Releases](https://github.com/SalyyS1/SLClean/
 
 | Tab | What It Does |
 |---|---|
-| **Clean** | Scans developer, AI, browser, app, game, and Windows caches alongside project build artifacts across all drives, measuring real disk usage and tagging every item by safety level. |
+| **Clean** | Scans developer, AI, browser, app, game, and Windows caches alongside project build artifacts across all drives, measuring real disk usage, grouping by `.git` project staleness (`By project`), exporting HTML/CSV audit reports, and tagging every item by safety level. |
 | **Apps** | Lists every installed desktop and Microsoft Store app with real measured folder sizes and Windows last-opened dates. Launches official uninstallers or removes dead registry entries that Windows Settings cannot clear. |
 | **Leftovers** | Finds orphaned folders inside `AppData`, `ProgramData`, `Program Files`, and `Local\Packages` unclaimed by any installed app or active process. |
-| **Large Files** | Walks all drives in a single pass to surface individual files above your size threshold alongside a three-level directory usage map. |
+| **Large Files** | Walks all drives in a single pass to surface individual files above your size threshold alongside a three-level directory usage map and an interactive **Squarified Treemap** drill-down view. |
 | **Duplicates** | Groups files that are identical byte for byte (size -> first 4 KB -> streaming SHA-256) so you can decide which copy to keep. |
 | **Startup** | Displays Windows startup entries from Registry `Run` keys, Startup folders, and Scheduled Tasks with non-destructive on/off toggles. |
-| **History** | Records a size snapshot after each scan and diffs any two snapshots to highlight what grew, shrank, or newly appeared. |
+| **History** | Records a size snapshot after each scan, diffs any two snapshots, and displays the persistent **Clean Run Ledger** with lifetime reclaimed bytes and Recycle Bin recovery audit trail. |
 
 The persistent left rail displays free space per fixed drive, your live selected byte total, the Recycle Bin mode toggle, live Recycle Bin size (with one-click empty), and a single **Clean selected items** action shared across **Clean**, **Leftovers**, **Large Files**, and **Duplicates**.
 
