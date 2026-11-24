@@ -4,9 +4,9 @@
 //! enforce CI runner disk budgets (`--max-reclaimable-gb`), or preview/execute safe cleanups.
 
 use crate::{
-    artifacts, blob_dupes, catalog, catalog_specs, cleaner, dead_links, drives, elevation,
-    env_reclaimer, ledger, mcp, parallel, project_roots, projects, report_export, sarif, settings,
-    sizer,
+    artifacts, blob_dupes, catalog, catalog_specs, cleaner, dead_links, disk_health, drives,
+    elevation, env_reclaimer, ledger, mcp, parallel, project_roots, projects, report_export,
+    sarif, settings, sizer,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -47,6 +47,9 @@ pub enum CliCommand {
         out: Option<PathBuf>,
     },
     Ledger {
+        out: Option<PathBuf>,
+    },
+    Doctor {
         out: Option<PathBuf>,
     },
     Mcp,
@@ -187,6 +190,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-projects" => mode = Some("scan-projects"),
             "--scan-hygiene" => mode = Some("scan-hygiene"),
             "--ledger" => mode = Some("ledger"),
+            "--doctor" => mode = Some("doctor"),
             "--mcp" => return Ok(Some(CliCommand::Mcp)),
             "--clean-safe" => mode = Some("clean-safe"),
             "--include-artifacts" => include_artifacts = true,
@@ -307,6 +311,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             out,
         })),
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
+        Some("doctor") => Ok(Some(CliCommand::Doctor { out })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -435,6 +440,12 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
         }
         CliCommand::Version => {
             emit_output(&format!("SLClean {}", env!("CARGO_PKG_VERSION")), None)?;
+            Ok(0)
+        }
+        CliCommand::Doctor { out } => {
+            let report = disk_health::run_default();
+            let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
             Ok(0)
         }
         CliCommand::ListSpecs { out } => {

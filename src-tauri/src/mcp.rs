@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, drives, ledger, project_roots, projects};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, ledger, project_roots, projects};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -115,6 +115,12 @@ fn tool_definitions() -> Value {
         {
             "name": "slclean_ledger_summary",
             "description": "Inspect SLClean's persistent Clean Run Ledger summary (lifetime reclaimed bytes, total runs, Recycle Bin vs Permanent counts, recent runs).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_doctor",
+            "description": "Compute an executive A-F workstation storage health diagnosis across all fixed drives and Clean Run Ledger history (read-only).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         },
@@ -289,6 +295,10 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_doctor" => {
+            let rep = disk_health::run_default();
+            tool_outcome(id, serde_json::to_value(&rep).unwrap_or_else(|_| json!({})), false)
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -368,7 +378,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 7);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 8);
 
         let dir = std::env::temp_dir().join("slclean_mcp_hygiene_test");
         let _ = std::fs::remove_dir_all(&dir);

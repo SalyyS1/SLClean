@@ -25,11 +25,13 @@ Grab the latest build from [GitHub Releases](https://github.com/SalyyS1/SLClean/
 |---|---|
 | **Clean** | Scans developer, AI, browser, app, game, and Windows caches alongside project build artifacts across all drives, measuring real disk usage, grouping by `.git` project staleness (`By project`), exporting HTML/CSV audit reports, and tagging every item by safety level. |
 | **Apps** | Lists every installed desktop and Microsoft Store app with real measured folder sizes and Windows last-opened dates. Launches official uninstallers or removes dead registry entries that Windows Settings cannot clear. |
-| **Leftovers** | Finds orphaned folders inside `AppData`, `ProgramData`, `Program Files`, and `Local\Packages` unclaimed by any installed app or active process. |
+| **Leftovers** | Finds orphaned folders inside `AppData`, `ProgramData`, `Program Files`, and `Local\Packages` unclaimed by any installed app or active process, plus an integrated **Hygiene Scanner (`SLC010`)** for empty folders & broken symlinks. |
 | **Large Files** | Walks all drives in a single pass to surface individual files above your size threshold alongside a three-level directory usage map and an interactive **Squarified Treemap** drill-down view. |
-| **Duplicates** | Groups files that are identical byte for byte (size -> first 4 KB -> streaming SHA-256) so you can decide which copy to keep. |
+| **Duplicates** | Groups files that are identical byte for byte (size -> first 4 KB -> streaming SHA-256) with safe **Keep newest / Keep oldest** pickers that always leave at least one copy intact. |
 | **Startup** | Displays Windows startup entries from Registry `Run` keys, Startup folders, and Scheduled Tasks with non-destructive on/off toggles. |
 | **History** | Records a size snapshot after each scan, diffs any two snapshots, and displays the persistent **Clean Run Ledger** with lifetime reclaimed bytes and Recycle Bin recovery audit trail. |
+
+> **v0.13.0 Power Features:** Built-in **8-tool Read-Only Stdio MCP Server (`SLClean --mcp`)** (`slclean_doctor`, `slclean_list_drives`, `slclean_scan_projects`, `slclean_scan_hygiene`, `slclean_scan_dupes`, `slclean_scan_big_files`, `slclean_ledger_summary`, `slclean_list_rules`), **Executive Disk Health Doctor (`SLClean --doctor`)**, **Free-Space Budget Alerts**, **Simple Mode**, and keyboard shortcuts (`Ctrl+K` focus search, `F5` rescan, `Esc` clear).
 
 The persistent left rail displays free space per fixed drive, your live selected byte total, the Recycle Bin mode toggle, live Recycle Bin size (with one-click empty), and a single **Clean selected items** action shared across **Clean**, **Leftovers**, **Large Files**, and **Duplicates**.
 

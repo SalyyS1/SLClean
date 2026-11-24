@@ -13,6 +13,7 @@ mod catalog_specs;
 mod cleaner;
 pub mod cli;
 pub mod dead_links;
+pub mod disk_health;
 mod drives;
 mod duplicates;
 mod elevation;

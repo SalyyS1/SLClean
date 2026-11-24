@@ -25,13 +25,15 @@ portable exe from [Releases](../../releases); the binary is unsigned, so SmartSc
 
 | Tab | Làm gì |
 |---|---|
-| **Dọn dẹp** | Cache, thư mục tạm và artifact build trên mọi ổ. Đo thật từng mục, phân loại theo mức an toàn. |
+| **Dọn dẹp** | Cache, thư mục tạm và artifact build trên mọi ổ, xem **Theo dự án (`.git`)**, xuất báo cáo **HTML/CSV**, dải tổng quan an toàn, phân loại chi tiết. |
 | **Ứng dụng** | Mọi app đã cài kèm lần mở cuối theo Windows ghi. Gỡ app, hoặc xoá mục "chết" mà Settings không gỡ được. |
-| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files mà không app đã cài nào nhận. |
-| **File lớn** | File đơn lẻ từ ngưỡng trở lên, kèm bản đồ dung lượng theo thư mục. |
-| **File trùng** | Nhóm file giống hệt nhau từng byte, để bạn tự chọn bản nào bỏ. |
+| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files mà không app đã cài nào nhận, kèm **Bộ quét vệ sinh (`SLC010`)** tìm thư mục rỗng & symlink hỏng. |
+| **File lớn** | File đơn lẻ từ ngưỡng trở lên, kèm bản đồ thư mục và biểu đồ **Squarified Treemap** tương tác. |
+| **File trùng** | Nhóm file giống hệt nhau từng byte, kèm nút chọn nhanh an toàn **Giữ bản mới nhất / Giữ bản cũ nhất** (luôn chừa lại ít nhất 1 bản gốc). |
 | **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |
-| **Nhật ký** | So hai lần quét: cái gì phình ra, cái gì nhỏ lại, cái gì mới xuất hiện. |
+| **Nhật ký** | So hai lần quét và lưu **Sổ cái các lần dọn (Clean Run Ledger)** theo dõi tổng dung lượng đã giải phóng & lịch sử khôi phục Thùng rác. |
+
+> **Tính năng mới v0.13.0:** Tích hợp **Stdio MCP Server 8 công cụ chỉ-đọc (`SLClean --mcp`)** cho Claude Code / Cursor / Windsurf / Codex, lệnh **`SLClean --doctor`** chấm điểm sức khoẻ ổ đĩa A–F, **Cảnh báo ngưỡng dung lượng trống**, **Chế độ đơn giản (Simple Mode)** và phím tắt nhanh (`Ctrl+K` tìm kiếm, `F5` quét lại).
 
 Cột trái luôn hiện dung lượng trống từng ổ, tổng đã tick, chế độ Thùng rác và nút dọn — mục
 cache, artifact và thư mục thừa dùng chung một nút đó. Tab **File lớn** và **File trùng** cũng
