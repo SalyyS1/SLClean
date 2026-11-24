@@ -251,6 +251,21 @@ pub fn render_doctor_sarif(rep: &DiskHealthReport) -> String {
     serde_json::to_string_pretty(&sarif).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Render a shields.io Endpoint Badge JSON summarizing workstation disk health grade & score.
+pub fn render_doctor_badge_json(rep: &DiskHealthReport) -> String {
+    let color = match rep.grade {
+        "A" => "brightgreen",
+        "B" => "green",
+        "C" => "yellow",
+        "D" => "orange",
+        _ => "red",
+    };
+    format!(
+        r#"{{"schemaVersion":1,"label":"SLClean Disk Health","message":"Grade {} ({}/100)","color":"{}"}}"#,
+        rep.grade, rep.score, color
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,5 +303,8 @@ mod tests {
         let sarif = render_doctor_sarif(&crit);
         assert!(sarif.contains("\"version\": \"2.1.0\""));
         assert!(sarif.contains("\"SLC011\""));
+        let badge = render_doctor_badge_json(&healthy);
+        assert!(badge.contains("\"schemaVersion\":1"));
+        assert!(badge.contains("\"brightgreen\""));
     }
 }

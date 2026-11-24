@@ -52,6 +52,7 @@ pub enum CliCommand {
     Doctor {
         report_html: Option<PathBuf>,
         sarif: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         fail_below_grade: Option<String>,
         out: Option<PathBuf>,
     },
@@ -198,6 +199,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
     let mut sarif_out: Option<PathBuf> = None;
     let mut report_html: Option<PathBuf> = None;
     let mut report_csv: Option<PathBuf> = None;
+    let mut badge_json: Option<PathBuf> = None;
     let mut startup_file: Option<PathBuf> = None;
     let mut fail_below_grade: Option<String> = None;
     let mut ext_min_bytes: u64 = 10 * 1024 * 1024;
@@ -263,6 +265,13 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
                     return Err("missing path after --report-csv".into());
                 };
                 report_csv = Some(PathBuf::from(p));
+            }
+            "--badge-json" => {
+                i += 1;
+                let Some(p) = args.get(i) else {
+                    return Err("missing path after --badge-json".into());
+                };
+                badge_json = Some(PathBuf::from(p));
             }
             "--env-root" | "--project-root" | "--hygiene-root" => {
                 i += 1;
@@ -365,6 +374,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         Some("doctor") => Ok(Some(CliCommand::Doctor {
             report_html,
             sarif: sarif_out,
+            badge_json,
             fail_below_grade,
             out,
         })),
@@ -518,6 +528,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
         CliCommand::Doctor {
             report_html,
             sarif,
+            badge_json,
             fail_below_grade,
             out,
         } => {
@@ -529,6 +540,10 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             if let Some(sarif_path) = sarif.as_ref() {
                 let s = disk_health::render_doctor_sarif(&report);
                 write_file_creating_dirs(sarif_path, &s)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let b = disk_health::render_doctor_badge_json(&report);
+                write_file_creating_dirs(badge_path, &b)?;
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
