@@ -418,8 +418,10 @@ $("#search").addEventListener("input", (e) => {
 });
 $("#search").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; query = ""; renderAll(); } });
 
-// Phím tắt cho người dùng chuyên nghiệp: Ctrl+K tìm nhanh, F5 quét lại tab hiện tại
+// Phím tắt cho người dùng chuyên nghiệp: Ctrl+K tìm nhanh, F5 quét lại tab hiện tại, Alt+1..7 chuyển tab, ? xem gợi ý
 document.addEventListener("keydown", (e) => {
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+  const inInput = tag === "input" || tag === "textarea" || tag === "select";
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
     const map = { clean: "#search", files: "#big-search", dupes: "#dup-search", apps: "#app-search" };
@@ -430,6 +432,16 @@ document.addEventListener("keydown", (e) => {
     if (activeTab === "clean") scan();
     else if (activeTab === "dupes" && typeof scanDuplicates === "function") scanDuplicates();
     else if (activeTab === "files" && typeof scanBig === "function") scanBig();
+  } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key >= "1" && e.key <= "7") {
+    e.preventDefault();
+    const order = ["clean", "apps", "leftovers", "files", "dupes", "startup", "history"];
+    const nextTab = order[Number(e.key) - 1];
+    if (nextTab && typeof switchTab === "function") switchTab(nextTab);
+  } else if (!inInput && e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    toast(lang === "vi"
+      ? "Phím tắt: Ctrl+K tìm · F5 quét lại · Alt+1..7 chuyển tab · Esc xoá lọc"
+      : "Shortcuts: Ctrl+K search · F5 rescan · Alt+1..7 switch tabs · Esc clear filter");
   }
 });
 

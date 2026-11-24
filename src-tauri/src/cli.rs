@@ -63,6 +63,9 @@ pub enum CliCommand {
         limit: usize,
         out: Option<PathBuf>,
     },
+    CheckSettings {
+        out: Option<PathBuf>,
+    },
     Mcp,
     ScanDupes {
         roots: Vec<PathBuf>,
@@ -204,6 +207,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-hygiene" => mode = Some("scan-hygiene"),
             "--scan-extensions" => mode = Some("scan-extensions"),
             "--audit-startup" => mode = Some("audit-startup"),
+            "--check-settings" => mode = Some("check-settings"),
             "--ledger" => mode = Some("ledger"),
             "--doctor" => mode = Some("doctor"),
             "--mcp" => return Ok(Some(CliCommand::Mcp)),
@@ -352,6 +356,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             limit: 20,
             out,
         })),
+        Some("check-settings") => Ok(Some(CliCommand::CheckSettings { out })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -560,6 +565,13 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 "extensions": buckets,
             });
             let json = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::CheckSettings { out } => {
+            let loaded = settings::load_offline();
+            let audit = settings::audit_settings(&loaded);
+            let json = serde_json::to_string_pretty(&audit).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             Ok(0)
         }
@@ -1232,6 +1244,15 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&startup_out).unwrap()).unwrap();
         assert_eq!(st_val["total_entries"].as_u64(), Some(2));
         assert_eq!(st_val["high_impact_count"].as_u64(), Some(1));
+
+        let cfg_out = root.join("settings-audit.json");
+        let parsed_cfg = parse_args(&vec_str(&["--check-settings", "--out", cfg_out.to_str().unwrap()]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(execute_command(parsed_cfg).unwrap(), 0);
+        let cfg_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&cfg_out).unwrap()).unwrap();
+        assert!(cfg_val["effective_language"].is_string());
 
         let _ = std::fs::remove_dir_all(&root);
     }
