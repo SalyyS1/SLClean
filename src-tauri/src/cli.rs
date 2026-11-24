@@ -51,6 +51,7 @@ pub enum CliCommand {
     },
     Doctor {
         report_html: Option<PathBuf>,
+        fail_below_grade: Option<String>,
         out: Option<PathBuf>,
     },
     AuditStartup {
@@ -195,6 +196,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
     let mut report_html: Option<PathBuf> = None;
     let mut report_csv: Option<PathBuf> = None;
     let mut startup_file: Option<PathBuf> = None;
+    let mut fail_below_grade: Option<String> = None;
     let mut ext_min_bytes: u64 = 10 * 1024 * 1024;
     let mut out: Option<PathBuf> = None;
 
@@ -229,6 +231,13 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
                     return Err("missing JSON path after --startup-file".into());
                 };
                 startup_file = Some(PathBuf::from(p));
+            }
+            "--fail-below-grade" => {
+                i += 1;
+                let Some(g) = args.get(i) else {
+                    return Err("missing grade (A|B|C|D) after --fail-below-grade".into());
+                };
+                fail_below_grade = Some(g.clone());
             }
             "--min-mb" => {
                 i += 1;
@@ -350,7 +359,11 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             out,
         })),
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
-        Some("doctor") => Ok(Some(CliCommand::Doctor { report_html, out })),
+        Some("doctor") => Ok(Some(CliCommand::Doctor {
+            report_html,
+            fail_below_grade,
+            out,
+        })),
         Some("audit-startup") => Ok(Some(CliCommand::AuditStartup {
             input_json: startup_file,
             out,
@@ -496,7 +509,11 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             emit_output(&format!("SLClean {}", env!("CARGO_PKG_VERSION")), None)?;
             Ok(0)
         }
-        CliCommand::Doctor { report_html, out } => {
+        CliCommand::Doctor {
+            report_html,
+            fail_below_grade,
+            out,
+        } => {
             let report = disk_health::run_default();
             if let Some(html_path) = report_html.as_ref() {
                 let html = disk_health::render_digest_html(&report);
@@ -504,6 +521,11 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
+            if let Some(min_g) = fail_below_grade.as_ref() {
+                if !disk_health::grade_meets_threshold(report.grade, min_g) {
+                    return Ok(EXIT_BUDGET_EXCEEDED);
+                }
+            }
             Ok(0)
         }
         CliCommand::AuditStartup { input_json, out } => {

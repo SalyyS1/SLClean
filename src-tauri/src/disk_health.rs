@@ -32,6 +32,19 @@ pub struct DiskHealthReport {
     pub recommendations: Vec<String>,
 }
 
+pub fn grade_meets_threshold(actual: &str, min_grade: &str) -> bool {
+    fn rank(g: &str) -> u8 {
+        match g.trim().to_ascii_uppercase().as_str() {
+            "A" => 5,
+            "B" => 4,
+            "C" => 3,
+            "D" => 2,
+            _ => 1,
+        }
+    }
+    rank(actual) >= rank(min_grade)
+}
+
 pub fn evaluate(drive_list: &[Drive], ledger_summary: LedgerSummary) -> DiskHealthReport {
     let mut total_cap = 0u64;
     let mut total_free = 0u64;
@@ -221,5 +234,8 @@ mod tests {
         let html = render_digest_html(&crit);
         assert!(html.contains("<!doctype html>"));
         assert!(html.contains("CRITICAL"));
+        assert!(grade_meets_threshold("A", "B"));
+        assert!(grade_meets_threshold("B", "B"));
+        assert!(!grade_meets_threshold("C", "B"));
     }
 }
