@@ -289,6 +289,12 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_doctor_badge",
+            "description": "Compute workstation Disk Health Doctor grade (A-F) and emit a shields.io Endpoint Badge JSON payload (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -717,6 +723,20 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_doctor_badge" => {
+            let doc = disk_health::run_default();
+            let badge_raw = disk_health::render_doctor_badge_json(&doc);
+            let badge_val: Value = serde_json::from_str(&badge_raw).unwrap_or_else(|_| json!({}));
+            tool_outcome(
+                id,
+                json!({
+                    "grade": doc.grade,
+                    "score": doc.score,
+                    "badge": badge_val,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -796,7 +816,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 19);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 20);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
