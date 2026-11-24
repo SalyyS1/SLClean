@@ -58,6 +58,7 @@ pub enum CliCommand {
     },
     AuditStartup {
         input_json: Option<PathBuf>,
+        report_html: Option<PathBuf>,
         fail_below_grade: Option<String>,
         out: Option<PathBuf>,
     },
@@ -380,6 +381,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         })),
         Some("audit-startup") => Ok(Some(CliCommand::AuditStartup {
             input_json: startup_file,
+            report_html,
             fail_below_grade,
             out,
         })),
@@ -556,6 +558,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
         }
         CliCommand::AuditStartup {
             input_json,
+            report_html,
             fail_below_grade,
             out,
         } => {
@@ -593,6 +596,10 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 (host_entries, cfg!(windows))
             };
             let report = startup_audit::audit_entries(&entries, verify_paths);
+            if let Some(html_path) = report_html.as_ref() {
+                let html = startup_audit::render_startup_html(&report);
+                write_file_creating_dirs(html_path, &html)?;
+            }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             if let Some(min_g) = fail_below_grade.as_ref() {

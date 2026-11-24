@@ -379,5 +379,53 @@ mod tests {
         let report = audit_entries(&entries, false);
         assert_eq!(report.grade, "A");
         assert!(report.boot_health_score >= 95);
+        let html = render_startup_html(&report);
+        assert!(html.contains("<!doctype html>"));
+        assert!(html.contains("SecurityHealth"));
     }
+}
+
+fn html_esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Render a self-contained dark-mode HTML Startup Boot-Impact Audit Report (read-only).
+pub fn render_startup_html(rep: &StartupAuditReport) -> String {
+    let mut rows = String::new();
+    for it in &rep.items {
+        rows.push_str(&format!(
+            "<tr><td><b>{}</b></td><td>{:?}</td><td>{}</td><td>+{} ms</td><td><code>{}</code></td><td>{}</td></tr>\n",
+            html_esc(&it.name),
+            it.impact,
+            html_esc(&it.category),
+            it.estimated_boot_ms,
+            html_esc(&it.recommended_action),
+            html_esc(&it.reason),
+        ));
+    }
+    format!(
+        r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SLClean Startup Boot-Impact Report</title>
+<style>
+body{{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}}
+.wrap{{max-width:980px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;font-size:12.5px}}th,td{{padding:8px 9px;border-bottom:1px solid #24302a;text-align:left}}
+th{{color:#93a89b}}code{{font-family:ui-monospace,monospace;color:#4ade80}}
+</style></head><body><div class="wrap">
+<div class="card"><h1>SLClean Windows Startup Boot-Impact Report</h1>
+<p>Boot Grade: <b>{}</b> ({}/100) &middot; Entries: <b>{}</b> (Enabled: <b>{}</b>, Heavy: <b>{}</b>, Broken: <b>{}</b>) &middot; Est. Login Overhead: <b>+{:.1}s</b></p></div>
+<div class="card"><table><thead><tr><th>Name</th><th>Impact</th><th>Category</th><th>Est. Cost</th><th>Action</th><th>Reason</th></tr></thead>
+<tbody>{}</tbody></table></div></div></body></html>"##,
+        html_esc(&rep.grade),
+        rep.boot_health_score,
+        rep.total_entries,
+        rep.enabled_count,
+        rep.high_impact_count,
+        rep.broken_count,
+        rep.estimated_boot_overhead_ms as f64 / 1000.0,
+        rows
+    )
 }
