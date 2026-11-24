@@ -50,6 +50,7 @@ pub enum CliCommand {
         out: Option<PathBuf>,
     },
     Doctor {
+        report_html: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     Mcp,
@@ -311,7 +312,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             out,
         })),
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
-        Some("doctor") => Ok(Some(CliCommand::Doctor { out })),
+        Some("doctor") => Ok(Some(CliCommand::Doctor { report_html, out })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -442,8 +443,12 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             emit_output(&format!("SLClean {}", env!("CARGO_PKG_VERSION")), None)?;
             Ok(0)
         }
-        CliCommand::Doctor { out } => {
+        CliCommand::Doctor { report_html, out } => {
             let report = disk_health::run_default();
+            if let Some(html_path) = report_html.as_ref() {
+                let html = disk_health::render_digest_html(&report);
+                write_file_creating_dirs(html_path, &html)?;
+            }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             Ok(0)

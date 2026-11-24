@@ -200,6 +200,18 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_plan_safe_cleanup",
+            "description": "Generate a strictly non-destructive, safety-ordered workstation cleanup roadmap (Safe caches -> Rebuildable .git artifacts -> Duplicate AI blobs -> Large file review) with exact dry-run CLI commands (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_free_gb": { "type": "number", "minimum": 1.0, "default": 20.0 }
+                },
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC010).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -479,6 +491,58 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
             let audit = settings::audit_settings(&s);
             tool_outcome(id, serde_json::to_value(&audit).unwrap_or_else(|_| json!({})), false)
         }
+        "slclean_plan_safe_cleanup" => {
+            let target_gb = args
+                .and_then(|a| a.get("target_free_gb"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or(20.0)
+                .max(1.0);
+            let doc = disk_health::run_default();
+            let specs_count = catalog_specs::spec_metadata().len();
+            let steps = vec![
+                json!({
+                    "phase": 1,
+                    "safety": "safe",
+                    "title": "Preview Safe App & Browser Caches (Dry-Run)",
+                    "command": "SLClean --clean-safe --dry-run",
+                    "deletes_automatically": false
+                }),
+                json!({
+                    "phase": 2,
+                    "safety": "rebuildable",
+                    "title": "Scan Stale .git Project Build Targets (>30 days untouched, SLC009)",
+                    "command": "SLClean --scan-projects --stale-days 30 --report-html slclean-projects.html",
+                    "deletes_automatically": false
+                }),
+                json!({
+                    "phase": 3,
+                    "safety": "review",
+                    "title": "Audit Byte-Identical Duplicate AI Weights (.safetensors/.gguf, SLC004)",
+                    "command": "SLClean --scan-dupes --trust-cas-names --sarif slclean-dupes.sarif",
+                    "deletes_automatically": false
+                }),
+                json!({
+                    "phase": 4,
+                    "safety": "review",
+                    "title": "Export Executive Workstation Storage Digest (HTML)",
+                    "command": "SLClean --doctor --report-html slclean-digest.html",
+                    "deletes_automatically": false
+                }),
+            ];
+            tool_outcome(
+                id,
+                json!({
+                    "target_free_gb": target_gb,
+                    "current_grade": doc.grade,
+                    "current_score": doc.score,
+                    "lowest_free_pct": doc.lowest_free_pct,
+                    "catalog_spec_count": specs_count,
+                    "zero_auto_delete_enforced": true,
+                    "steps": steps,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -558,7 +622,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 14);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 15);
 
         let startup_call = json!({
             "jsonrpc": "2.0",

@@ -33,7 +33,7 @@ portable exe from [Releases](../../releases); the binary is unsigned, so SmartSc
 | **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |
 | **Nhật ký** | So hai lần quét và lưu **Sổ cái các lần dọn (Clean Run Ledger)** theo dõi tổng dung lượng đã giải phóng & lịch sử khôi phục Thùng rác. |
 
-> **Tính năng mới v0.19.0:** Tích hợp **Stdio MCP Server 14 công cụ chỉ-đọc (`SLClean --mcp`)** bổ sung **`slclean_inspect_settings`** kiểm tra quy tắc loại trừ & chính sách an toàn, **`slclean_export_digest_html`** xuất báo cáo HTML sức khoẻ ổ đĩa + sổ cái dọn dẹp, **`slclean_extension_breakdown`** + dải lọc đuôi file nhanh, **`slclean_audit_startup_entries`** + nhãn **Heavy boot / Updater**, **`SLClean --doctor`**, **Xuất sổ cái CSV**, **Simple Mode** và phím tắt (`Ctrl+K`, `F5`).
+> **Cột mốc v0.20.0:** Tích hợp **Stdio MCP Server 15 công cụ chỉ-đọc (`SLClean --mcp`)** bổ sung **`slclean_plan_safe_cleanup`** lập lộ trình dọn dẹp an toàn 4 bước, lệnh **`SLClean --doctor --report-html digest.html`** xuất báo cáo HTML sức khoẻ ổ đĩa từ dòng lệnh, **`slclean_inspect_settings`**, **`slclean_extension_breakdown`** + dải lọc đuôi file nhanh, **`slclean_audit_startup_entries`** + nhãn **Heavy boot / Updater**, **Xuất sổ cái CSV**, **Simple Mode** và phím tắt (`Ctrl+K`, `F5`).
 
 Cột trái luôn hiện dung lượng trống từng ổ, tổng đã tick, chế độ Thùng rác và nút dọn — mục
 cache, artifact và thư mục thừa dùng chung một nút đó. Tab **File lớn** và **File trùng** cũng
