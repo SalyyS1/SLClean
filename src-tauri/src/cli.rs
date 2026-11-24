@@ -57,6 +57,7 @@ pub enum CliCommand {
     },
     AuditStartup {
         input_json: Option<PathBuf>,
+        fail_below_grade: Option<String>,
         out: Option<PathBuf>,
     },
     ScanExtensions {
@@ -369,6 +370,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         })),
         Some("audit-startup") => Ok(Some(CliCommand::AuditStartup {
             input_json: startup_file,
+            fail_below_grade,
             out,
         })),
         Some("scan-extensions") => Ok(Some(CliCommand::ScanExtensions {
@@ -531,13 +533,17 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             if let Some(min_g) = fail_below_grade.as_ref() {
-                if !disk_health::grade_meets_threshold(report.grade, min_g) {
+                if !disk_health::grade_meets_threshold(&report.grade, min_g) {
                     return Ok(EXIT_BUDGET_EXCEEDED);
                 }
             }
             Ok(0)
         }
-        CliCommand::AuditStartup { input_json, out } => {
+        CliCommand::AuditStartup {
+            input_json,
+            fail_below_grade,
+            out,
+        } => {
             let (entries, verify_paths) = if let Some(path) = input_json.as_ref() {
                 let raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
                 let parsed: Vec<startup_audit::StartupAuditInput> =
@@ -574,6 +580,11 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             let report = startup_audit::audit_entries(&entries, verify_paths);
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
+            if let Some(min_g) = fail_below_grade.as_ref() {
+                if !disk_health::grade_meets_threshold(&report.grade, min_g) {
+                    return Ok(EXIT_BUDGET_EXCEEDED);
+                }
+            }
             Ok(0)
         }
         CliCommand::ScanExtensions {
