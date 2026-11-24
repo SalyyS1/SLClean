@@ -418,6 +418,21 @@ $("#search").addEventListener("input", (e) => {
 });
 $("#search").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; query = ""; renderAll(); } });
 
+// Phím tắt cho người dùng chuyên nghiệp: Ctrl+K tìm nhanh, F5 quét lại tab hiện tại
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    const map = { clean: "#search", files: "#big-search", dupes: "#dup-search", apps: "#app-search" };
+    const input = $(map[activeTab] || "#search");
+    if (input) { input.focus(); input.select(); }
+  } else if (e.key === "F5" && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    if (activeTab === "clean") scan();
+    else if (activeTab === "dupes" && typeof scanDuplicates === "function") scanDuplicates();
+    else if (activeTab === "files" && typeof scanBig === "function") scanBig();
+  }
+});
+
 for (const btn of document.querySelectorAll("[data-pick]")) btn.addEventListener("click", () => pick(btn.dataset.pick));
 
 // Tick cả nhóm (hoặc cả danh sách phẳng): chỉ các hàng đang hiển thị trong nhóm đó.

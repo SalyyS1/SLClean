@@ -214,5 +214,31 @@ $("#dup-search").addEventListener("input", (e) => {
 });
 $("#dup-search").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; dupQuery = ""; renderDupes(); } });
 
+// Chọn nhanh an toàn: luôn giữ lại đúng 1 bản gốc (mới nhất hoặc cũ nhất) trong mỗi nhóm hiển thị
+function pickDuplicates(mode) {
+  const shown = dupGroups.filter((g) => dupMatches(g) && dupCounts(g).live > 1);
+  for (const g of shown) {
+    const liveFiles = g.files
+      .filter((f) => { const it = items.get(`dup:${f.path}`); return it && !it.gone; })
+      .sort((a, b) => a.modified - b.modified);
+    if (liveFiles.length < 2) continue;
+    const keepPath = mode === "keep-newest"
+      ? liveFiles[liveFiles.length - 1].path
+      : mode === "keep-oldest"
+        ? liveFiles[0].path
+        : null;
+    for (const f of liveFiles) {
+      const it = items.get(`dup:${f.path}`);
+      if (!it) continue;
+      it.checked = mode === "clear" ? false : f.path !== keepPath;
+    }
+  }
+  renderDupes();
+  refreshTotals();
+}
+for (const btn of document.querySelectorAll("[data-dup-pick]")) {
+  btn.addEventListener("click", () => pickDuplicates(btn.dataset.dupPick));
+}
+
 $("#dup-min").value = String(dupMin);
 onTabFirstShow("dupes", scanDuplicates);

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SLClean v0.11.0 - Windows AI &amp; Developer Cache Explorer, 6-Tool Read-Only MCP Server, Squarified Treemap &amp; Clean Ledger</title>
-  <meta name="description" content="Interactive rule explorer, 6-tool read-only stdio MCP server (SLClean --mcp), Squarified Disk Treemap, AI cache &amp; duplicate weight dedup calculator, project-centric .git staleness reclaimer (SLC009), hygiene scanner (SLC010), Clean Run Ledger, HTML/CSV exporter, and CI disk-budget calculator for SLClean v0.11.0." />
+  <title>SLClean v0.12.0 - Windows AI &amp; Developer Cache Explorer, 7-Tool Read-Only MCP Server, Squarified Treemap &amp; Clean Ledger</title>
+  <meta name="description" content="Interactive rule explorer, 7-tool read-only stdio MCP server (SLClean --mcp), Squarified Disk Treemap, AI cache &amp; duplicate weight dedup calculator, project-centric .git staleness reclaimer (SLC009), hygiene scanner (SLC010), Clean Run Ledger, HTML/CSV exporter, and CI disk-budget calculator for SLClean v0.12.0." />
   <style>
     :root {
       --bg: #0f1411;
@@ -299,10 +299,10 @@
 <body>
   <div class="wrap">
     <header>
-      <span class="eyebrow">SLClean v0.11.0 | Rust + Tauri 2 | 6-Tool Read-Only Stdio MCP · Treemap · By-Project · Hygiene · Clean Ledger</span>
+      <span class="eyebrow">SLClean v0.12.0 | Rust + Tauri 2 | 7-Tool Read-Only Stdio MCP · Treemap · Smart Dupe Picker · Hygiene · Clean Ledger</span>
       <h1>Windows AI, Project Artifact &amp; Developer Cache Footprint Explorer</h1>
       <p class="lead">
-        Inspect every cache rule, interactive Squarified Disk Treemap, project-centric <code>.git</code> staleness reclaimer (SLC009), empty-dir &amp; dead-symlink hygiene scanner (SLC010), Clean Run Ledger audit trail, HTML/CSV exporter, and path-protection guard built into SLClean v0.8.0.
+        Inspect every cache rule, interactive Squarified Disk Treemap, 7-tool read-only Stdio MCP server (<code>SLClean --mcp</code>), project-centric <code>.git</code> staleness reclaimer (SLC009), empty-dir &amp; dead-symlink hygiene scanner (SLC010), Clean Run Ledger audit trail, HTML/CSV exporter, and path-protection guard built into SLClean v0.12.0.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/SalyyS1/SLClean/releases/latest">Download Windows Installer &amp; Portable .exe</a>
@@ -475,15 +475,21 @@
     </section>
 
     <section class="cli-box">
-      <h2>5. Headless CLI Audit, Environment Reclaimer &amp; GitHub Action (v0.6.0)</h2>
-      <p class="sub">Audit workstation cache growth, reclaim orphaned Python/Node/Rust environments, verify duplicate AI model blobs, and gate CI runners without opening a GUI window.</p>
-      <pre># Scan project roots for broken Python venvs, manifest-less node_modules, and stale Cargo targets (SLC006-SLC008)
-.\SLClean-portable.exe --scan-envs --stale-days 30 --sarif envs.sarif --out envs.json
+      <h2>5. Built-In 7-Tool Read-Only MCP Server (<code>SLClean --mcp</code>) &amp; Headless CLI (v0.12.0)</h2>
+      <p class="sub">Connect Claude Code, Cursor, Windsurf, or Codex directly to SLClean's strictly read-only MCP server (<code>slclean_list_drives</code>, <code>slclean_scan_projects</code>, <code>slclean_scan_hygiene</code>, <code>slclean_scan_dupes</code>, <code>slclean_scan_big_files</code>, <code>slclean_ledger_summary</code>, <code>slclean_list_rules</code>) — zero automatic deletion guaranteed.</p>
+      <div class="chips" id="mcp-client-chips"></div>
+      <pre id="mcp-config-out"></pre>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+        <button type="button" class="btn btn-primary" id="mcp-copy-btn">Copy MCP Config</button>
+        <span id="mcp-copy-msg" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      <pre style="margin-top:16px"># Scan project roots for broken Python venvs, manifest-less node_modules, and stale Cargo targets (SLC006-SLC009)
+.\SLClean-portable.exe --scan-projects --stale-days 30 --report-html audit.html --report-csv audit.csv
 
-# Reclaim verified orphan environments while preserving active WSL2/Docker .vhdx virtual disks
-.\SLClean-portable.exe --scan-envs --reclaim-orphans --confirm-delete
+# Scan empty folders &amp; broken symlinks (SLC010)
+.\SLClean-portable.exe --scan-hygiene --out hygiene.json
 
-# Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath
+# Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath (SLC004)
 .\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
 
 # Export OASIS SARIF v2.1.0 report and fail CI runner (exit code 3) if reclaimable disk bloat exceeds 15 GB
@@ -771,6 +777,33 @@
       }
     }
     renderDemoTreemap();
+    const MCP_SNIPPETS = {
+      "Cursor / Claude Desktop": JSON.stringify({ mcpServers: { slclean: { command: "C:\\\\Tools\\\\SLClean-portable.exe", args: ["--mcp"] } } }, null, 2),
+      "Claude Code CLI": "claude mcp add slclean -- C:\\Tools\\SLClean-portable.exe --mcp",
+      "JSON-RPC Smoke Test": "echo {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"} | .\\SLClean-portable.exe --mcp"
+    };
+    const mcpChips = document.getElementById("mcp-client-chips");
+    const mcpOut = document.getElementById("mcp-config-out");
+    const mcpCopy = document.getElementById("mcp-copy-btn");
+    const mcpMsg = document.getElementById("mcp-copy-msg");
+    if (mcpChips && mcpOut) {
+      let curKey = Object.keys(MCP_SNIPPETS)[0];
+      const renderMcp = (k) => {
+        curKey = k;
+        mcpOut.textContent = MCP_SNIPPETS[k];
+        mcpChips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c.textContent === k));
+      };
+      for (const k of Object.keys(MCP_SNIPPETS)) {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "chip"; b.textContent = k;
+        b.onclick = () => renderMcp(k);
+        mcpChips.appendChild(b);
+      }
+      if (mcpCopy) mcpCopy.onclick = () => {
+        if (navigator.clipboard) navigator.clipboard.writeText(MCP_SNIPPETS[curKey]).then(() => { mcpMsg.textContent = "Copied!"; });
+      };
+      renderMcp(curKey);
+    }
     renderEstimator();
     renderAiCalculator();
     renderEnvReclaimer();
