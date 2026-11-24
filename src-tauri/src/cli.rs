@@ -51,6 +51,7 @@ pub enum CliCommand {
     },
     Doctor {
         report_html: Option<PathBuf>,
+        sarif: Option<PathBuf>,
         fail_below_grade: Option<String>,
         out: Option<PathBuf>,
     },
@@ -361,6 +362,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
         Some("doctor") => Ok(Some(CliCommand::Doctor {
             report_html,
+            sarif: sarif_out,
             fail_below_grade,
             out,
         })),
@@ -511,6 +513,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
         }
         CliCommand::Doctor {
             report_html,
+            sarif,
             fail_below_grade,
             out,
         } => {
@@ -518,6 +521,10 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             if let Some(html_path) = report_html.as_ref() {
                 let html = disk_health::render_digest_html(&report);
                 write_file_creating_dirs(html_path, &html)?;
+            }
+            if let Some(sarif_path) = sarif.as_ref() {
+                let s = disk_health::render_doctor_sarif(&report);
+                write_file_creating_dirs(sarif_path, &s)?;
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;

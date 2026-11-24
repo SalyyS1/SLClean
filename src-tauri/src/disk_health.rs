@@ -203,6 +203,54 @@ th,td{{padding:8px 10px;border-bottom:1px solid #223040;text-align:left;font-siz
     )
 }
 
+/// Render Disk Health Doctor findings (`SLC011`-`SLC013`) as OASIS SARIF v2.1.0 JSON for CI Code Scanning.
+pub fn render_doctor_sarif(rep: &DiskHealthReport) -> String {
+    let mut results = Vec::new();
+    for d in &rep.drives {
+        if d.status == "critical" {
+            results.push(serde_json::json!({
+                "ruleId": "SLC011",
+                "level": "error",
+                "message": { "text": format!("Drive {} is critically low on free space ({:.1}% used, {} free).", d.mount, d.used_pct, fmt_gib(d.free_bytes)) },
+                "locations": [{ "physicalLocation": { "artifactLocation": { "uri": d.mount } } }]
+            }));
+        } else if d.status == "warning" {
+            results.push(serde_json::json!({
+                "ruleId": "SLC012",
+                "level": "warning",
+                "message": { "text": format!("Drive {} has low free headroom ({:.1}% used, {} free).", d.mount, d.used_pct, fmt_gib(d.free_bytes)) },
+                "locations": [{ "physicalLocation": { "artifactLocation": { "uri": d.mount } } }]
+            }));
+        }
+    }
+    if !grade_meets_threshold(rep.grade, "B") {
+        results.push(serde_json::json!({
+            "ruleId": "SLC013",
+            "level": "warning",
+            "message": { "text": format!("Workstation disk health grade is {} (score {}/100, lowest free {:.1}%).", rep.grade, rep.score, rep.lowest_free_pct) }
+        }));
+    }
+    let sarif = serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "SLClean",
+                    "version": rep.version,
+                    "rules": [
+                        { "id": "SLC011", "name": "CriticalLowDiskSpace", "shortDescription": { "text": "Fixed drive has <5% free space remaining" } },
+                        { "id": "SLC012", "name": "WarningLowDiskSpace", "shortDescription": { "text": "Fixed drive has <15% free space remaining" } },
+                        { "id": "SLC013", "name": "LowDiskHealthGrade", "shortDescription": { "text": "Overall workstation disk health grade dropped below B" } }
+                    ]
+                }
+            },
+            "results": results
+        }]
+    });
+    serde_json::to_string_pretty(&sarif).unwrap_or_else(|_| "{}".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +285,8 @@ mod tests {
         assert!(grade_meets_threshold("A", "B"));
         assert!(grade_meets_threshold("B", "B"));
         assert!(!grade_meets_threshold("C", "B"));
+        let sarif = render_doctor_sarif(&crit);
+        assert!(sarif.contains("\"version\": \"2.1.0\""));
+        assert!(sarif.contains("\"SLC011\""));
     }
 }
