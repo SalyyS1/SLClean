@@ -66,6 +66,7 @@ pub enum CliCommand {
         roots: Vec<PathBuf>,
         min_bytes: u64,
         limit: usize,
+        report_html: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     CheckSettings {
@@ -389,6 +390,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             roots: env_roots,
             min_bytes: ext_min_bytes,
             limit: 20,
+            report_html,
             out,
         })),
         Some("check-settings") => Ok(Some(CliCommand::CheckSettings { out })),
@@ -613,6 +615,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             roots,
             min_bytes,
             limit,
+            report_html,
             out,
         } => {
             let effective_roots = if roots.is_empty() {
@@ -629,6 +632,10 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 |_| {},
             );
             let buckets = big_files::summarize_extensions(&scan.files, limit);
+            if let Some(html_path) = report_html.as_ref() {
+                let html = big_files::render_extensions_html(&buckets, scan.files.len(), min_bytes);
+                write_file_creating_dirs(html_path, &html)?;
+            }
             let payload = serde_json::json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "min_bytes": min_bytes,

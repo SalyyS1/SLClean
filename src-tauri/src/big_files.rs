@@ -263,6 +263,49 @@ pub fn summarize_extensions(files: &[BigFile], limit: usize) -> Vec<ExtensionBuc
     rows
 }
 
+fn html_esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Render a self-contained dark-mode HTML Extension Breakdown report (read-only).
+pub fn render_extensions_html(buckets: &[ExtensionBucket], matched_files: usize, min_bytes: u64) -> String {
+    let mut rows = String::new();
+    for b in buckets {
+        let gib = b.bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+        let pct = b.share_pct.clamp(0.0, 100.0);
+        rows.push_str(&format!(
+            "<tr><td><code>.{}</code></td><td>{}</td><td>{}</td><td>{:.2} GiB</td><td><div style=\"background:#1c2520;height:10px;border-radius:4px;overflow:hidden;min-width:120px\"><div style=\"background:#4ade80;height:100%;width:{:.1}%\"></div></div> {:.1}%</td></tr>\n",
+            html_esc(&b.ext),
+            html_esc(&b.category),
+            b.files,
+            gib,
+            pct,
+            pct,
+        ));
+    }
+    format!(
+        r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SLClean Extension Breakdown Report</title>
+<style>
+body{{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}}
+.wrap{{max-width:940px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;font-size:13px}}th,td{{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left}}
+th{{color:#93a89b}}code{{font-family:ui-monospace,monospace;color:#4ade80}}
+</style></head><body><div class="wrap">
+<div class="card"><h1>SLClean Large File Extension Breakdown (Read-Only)</h1>
+<p>Matched files: <b>{}</b> &middot; Threshold: <b>{:.1} MiB</b> &middot; Extensions shown: <b>{}</b></p></div>
+<div class="card"><table><thead><tr><th>Extension</th><th>Category</th><th>Files</th><th>Size</th><th>Share</th></tr></thead>
+<tbody>{}</tbody></table></div></div></body></html>"##,
+        matched_files,
+        min_bytes as f64 / (1024.0 * 1024.0),
+        buckets.len(),
+        rows
+    )
+}
+
 /// Quét các gốc, trả file lớn (lớn nhất trước) và bản đồ thư mục theo gốc.
 pub fn scan(roots: &[PathBuf], excluded: &[PathBuf], threshold: u64, cancel: &AtomicBool, mut on_progress: impl FnMut(&BigScan), mut on_file: impl FnMut(&BigFile)) -> BigScan {
     let mut out = BigScan::default();
