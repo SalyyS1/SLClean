@@ -66,6 +66,10 @@ pub enum CliCommand {
     CheckSettings {
         out: Option<PathBuf>,
     },
+    PlanCleanup {
+        target_free_gb: f64,
+        out: Option<PathBuf>,
+    },
     Mcp,
     ScanDupes {
         roots: Vec<PathBuf>,
@@ -208,6 +212,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-extensions" => mode = Some("scan-extensions"),
             "--audit-startup" => mode = Some("audit-startup"),
             "--check-settings" => mode = Some("check-settings"),
+            "--plan-cleanup" => mode = Some("plan-cleanup"),
             "--ledger" => mode = Some("ledger"),
             "--doctor" => mode = Some("doctor"),
             "--mcp" => return Ok(Some(CliCommand::Mcp)),
@@ -357,6 +362,10 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             out,
         })),
         Some("check-settings") => Ok(Some(CliCommand::CheckSettings { out })),
+        Some("plan-cleanup") => Ok(Some(CliCommand::PlanCleanup {
+            target_free_gb: max_reclaimable_gb.unwrap_or(20.0).max(1.0),
+            out,
+        })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -572,6 +581,30 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             let loaded = settings::load_offline();
             let audit = settings::audit_settings(&loaded);
             let json = serde_json::to_string_pretty(&audit).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::PlanCleanup {
+            target_free_gb,
+            out,
+        } => {
+            let doc = disk_health::run_default();
+            let payload = serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "read_only": true,
+                "target_free_gb": target_free_gb,
+                "current_grade": doc.grade,
+                "current_score": doc.score,
+                "lowest_free_pct": doc.lowest_free_pct,
+                "catalog_spec_count": catalog_specs::spec_metadata().len(),
+                "phases": [
+                    {"phase": 1, "safety": "safe", "command": "SLClean --clean-safe --dry-run", "deletes_automatically": false},
+                    {"phase": 2, "safety": "rebuildable", "command": "SLClean --scan-projects --stale-days 30 --report-html slclean-projects.html", "deletes_automatically": false},
+                    {"phase": 3, "safety": "review", "command": "SLClean --scan-dupes --trust-cas-names --sarif slclean-dupes.sarif", "deletes_automatically": false},
+                    {"phase": 4, "safety": "review", "command": "SLClean --doctor --report-html slclean-digest.html", "deletes_automatically": false}
+                ]
+            });
+            let json = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             Ok(0)
         }
@@ -1253,6 +1286,16 @@ mod tests {
         let cfg_val: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&cfg_out).unwrap()).unwrap();
         assert!(cfg_val["effective_language"].is_string());
+
+        let plan_out = root.join("plan.json");
+        let parsed_plan = parse_args(&vec_str(&["--plan-cleanup", "--out", plan_out.to_str().unwrap()]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(execute_command(parsed_plan).unwrap(), 0);
+        let plan_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&plan_out).unwrap()).unwrap();
+        assert_eq!(plan_val["read_only"].as_bool(), Some(true));
+        assert_eq!(plan_val["phases"].as_array().map(|a| a.len()), Some(4));
 
         let _ = std::fs::remove_dir_all(&root);
     }

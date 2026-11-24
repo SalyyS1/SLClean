@@ -31,7 +31,9 @@ portable exe from [Releases](../../releases); the binary is unsigned, so SmartSc
 | **File lớn** | File đơn lẻ từ ngưỡng trở lên, kèm bản đồ thư mục và biểu đồ **Squarified Treemap** tương tác. |
 | **File trùng** | Nhóm file giống hệt nhau từng byte, kèm nút chọn nhanh an toàn **Giữ bản mới nhất / Giữ bản cũ nhất** (luôn chừa lại ít nhất 1 bản gốc). |
 | **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |
-| **Nhật ký** | So hai lần quét và lưu **Sổ cái các lần dọn (Clean Run Ledger)** theo dõi tổng dung lượng đã giải phóng & lịch sử khôi phục Thùng rác. |
+| **Nhật ký** | So hai lần quét, xuất **Báo cáo Sức khoẻ Ổ đĩa HTML 1 cú bấm (`Export Digest HTML`)**, và lưu **Sổ cái các lần dọn (Clean Run Ledger)** theo dõi tổng dung lượng đã giải phóng & lịch sử khôi phục Thùng rác. |
+
+> **Cột mốc v0.24.0:** Tích hợp **MCP Server 15 công cụ chỉ-đọc (`SLClean --mcp`)**, phím tắt **`Alt+1..7` / `Ctrl+K` / `F5` / `?`**, nút **Export Digest HTML** ngay trong app, cùng bộ lệnh CLI không phá huỷ: `--plan-cleanup`, `--doctor --report-html`, `--audit-startup`, `--scan-extensions`, `--check-settings`, `--scan-projects`, `--scan-dupes`, `--scan-hygiene` (SARIF v2.1.0).
 
 > **Cột mốc v0.20.0:** Tích hợp **Stdio MCP Server 15 công cụ chỉ-đọc (`SLClean --mcp`)** bổ sung **`slclean_plan_safe_cleanup`** lập lộ trình dọn dẹp an toàn 4 bước, lệnh **`SLClean --doctor --report-html digest.html`** xuất báo cáo HTML sức khoẻ ổ đĩa từ dòng lệnh, **`slclean_inspect_settings`**, **`slclean_extension_breakdown`** + dải lọc đuôi file nhanh, **`slclean_audit_startup_entries`** + nhãn **Heavy boot / Updater**, **Xuất sổ cái CSV**, **Simple Mode** và phím tắt (`Ctrl+K`, `F5`).
 
