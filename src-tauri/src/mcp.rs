@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects, startup_audit};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects, settings, startup_audit};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -190,6 +190,12 @@ fn tool_definitions() -> Value {
         {
             "name": "slclean_export_digest_html",
             "description": "Generate a self-contained dark-mode executive HTML workstation storage digest combining Drive Pressure (A-F), Clean Run Ledger summary, and non-destructive recommendations (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_inspect_settings",
+            "description": "Inspect active SLClean workstation settings (language, Recycle Bin default, Simple Mode, free-space budget) and validate extra/excluded project paths for missing or redundant entries (read-only).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         },
@@ -468,6 +474,11 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_inspect_settings" => {
+            let s = settings::load_offline();
+            let audit = settings::audit_settings(&s);
+            tool_outcome(id, serde_json::to_value(&audit).unwrap_or_else(|_| json!({})), false)
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -547,7 +558,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 13);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 14);
 
         let startup_call = json!({
             "jsonrpc": "2.0",
