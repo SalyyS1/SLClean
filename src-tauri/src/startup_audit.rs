@@ -321,9 +321,9 @@ mod tests {
             },
             StartupAuditInput {
                 name: "OldApp".into(),
-                command: "/nonexistent/slclean/oldapp.bin".into(),
+                command: r"C:\Nonexistent\OldApp\oldapp.exe".into(),
                 enabled: true,
-                broken: false,
+                broken: true,
                 system: false,
                 stale: false,
             },
@@ -337,7 +337,7 @@ mod tests {
             },
         ];
 
-        let report = audit_entries(&entries, true);
+        let report = audit_entries(&entries, false);
         assert_eq!(report.total_entries, 4);
         assert_eq!(report.high_impact_count, 1);
         assert_eq!(report.broken_count, 1);
@@ -349,6 +349,21 @@ mod tests {
         assert_eq!(report.items[2].impact, BootImpact::Broken);
         assert_eq!(report.items[3].impact, BootImpact::Medium);
         assert!(report.boot_health_score < 85);
+
+        let missing = std::env::temp_dir().join("slclean_definitely_missing_startup_98765.exe");
+        let path_check = audit_entries(
+            &[StartupAuditInput {
+                name: "GhostTool".into(),
+                command: format!("\"{}\" --tray", missing.display()),
+                enabled: true,
+                broken: false,
+                system: false,
+                stale: false,
+            }],
+            true,
+        );
+        assert_eq!(path_check.broken_count, 1);
+        assert_eq!(path_check.items[0].impact, BootImpact::Broken);
     }
 
     #[test]
