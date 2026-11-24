@@ -274,6 +274,21 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_extensions_html",
+            "description": "Scan directories for large files above min_mb and render a self-contained dark-mode HTML Storage Breakdown by File Extension Report (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "min_mb": { "type": "number", "minimum": 0.001, "default": 50.0 },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 15 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -675,6 +690,33 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_extensions_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let min_mb = args.and_then(|a| a.get("min_mb")).and_then(|v| v.as_f64()).unwrap_or(50.0).max(0.001);
+            let limit = args.and_then(|a| a.get("limit")).and_then(|v| v.as_u64()).unwrap_or(15).clamp(1, 50) as usize;
+            let min_bytes = (min_mb * 1024.0 * 1024.0).round() as u64;
+            let cancel = AtomicBool::new(false);
+            let scan = big_files::scan(&roots, &[], min_bytes, &cancel, |_| {}, |_| {});
+            let buckets = big_files::summarize_extensions(&scan.files, limit);
+            let html = big_files::render_extensions_html(&buckets, scan.files.len(), min_bytes);
+            tool_outcome(
+                id,
+                json!({
+                    "matched_files": scan.files.len(),
+                    "extension_buckets": buckets.len(),
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -754,7 +796,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 18);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 19);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
