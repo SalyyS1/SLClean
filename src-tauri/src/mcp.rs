@@ -188,6 +188,12 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_digest_html",
+            "description": "Generate a self-contained dark-mode executive HTML workstation storage digest combining Drive Pressure (A-F), Clean Run Ledger summary, and non-destructive recommendations (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC010).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -448,6 +454,20 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_digest_html" => {
+            let rep = disk_health::run_default();
+            let html = disk_health::render_digest_html(&rep);
+            tool_outcome(
+                id,
+                json!({
+                    "grade": rep.grade,
+                    "score": rep.score,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -527,7 +547,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 12);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 13);
 
         let startup_call = json!({
             "jsonrpc": "2.0",

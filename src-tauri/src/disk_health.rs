@@ -120,6 +120,76 @@ pub fn run_default() -> DiskHealthReport {
     evaluate(&list, ledger_summary)
 }
 
+fn html_esc(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn fmt_gib(bytes: u64) -> String {
+    format!("{:.2} GiB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+}
+
+/// Render a self-contained dark-mode executive HTML workstation storage digest (read-only).
+pub fn render_digest_html(rep: &DiskHealthReport) -> String {
+    let accent = match rep.grade {
+        "A" | "B" => "#48e8b2",
+        "C" => "#fbbf24",
+        _ => "#f85149",
+    };
+    let mut drive_rows = String::new();
+    for d in &rep.drives {
+        drive_rows.push_str(&format!(
+            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{:.1}%</td><td><b>{}</b></td></tr>\n",
+            html_esc(&d.mount),
+            fmt_gib(d.total_bytes),
+            fmt_gib(d.free_bytes),
+            d.used_pct,
+            html_esc(d.status),
+        ));
+    }
+    let mut rec_items = String::new();
+    for r in &rep.recommendations {
+        rec_items.push_str(&format!("<li>{}</li>\n", html_esc(r)));
+    }
+    format!(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean v{} Executive Storage Digest</title>\
+<style>body{{font-family:system-ui,sans-serif;background:#0b1116;color:#e6edf3;margin:0;padding:28px}}\
+.wrap{{max-width:860px;margin:0 auto}}.card{{background:#131b24;border:1px solid #263445;border-radius:12px;padding:18px;margin-bottom:16px}}\
+.grade{{font-size:44px;font-weight:800;color:{accent}}}table{{width:100%;border-collapse:collapse}}\
+th,td{{padding:8px 10px;border-bottom:1px solid #223040;text-align:left;font-size:13px}}th{{color:#8b9bb0}}</style></head>\
+<body><div class=\"wrap\">\
+<div class=\"card\"><h1>SLClean v{} — Executive Workstation Storage Digest</h1>\
+<p class=\"grade\">Grade {} ({}/100)</p>\
+<p>Drives: {} · Total Free: {} / {} · Lowest Free: {:.1}% · Lifetime Reclaimed: {} ({} runs)</p></div>\
+<div class=\"card\"><h2>Drive Pressure</h2><table><thead><tr><th>Mount</th><th>Capacity</th><th>Free</th><th>Used %</th><th>Status</th></tr></thead>\
+<tbody>{}</tbody></table></div>\
+<div class=\"card\"><h2>Recommended Non-Destructive Next Steps</h2><ul>{}</ul></div>\
+</div></body></html>",
+        html_esc(rep.version),
+        html_esc(rep.version),
+        html_esc(rep.grade),
+        rep.score,
+        rep.drive_count,
+        fmt_gib(rep.total_free_bytes),
+        fmt_gib(rep.total_capacity_bytes),
+        rep.lowest_free_pct,
+        fmt_gib(rep.ledger.lifetime_freed_bytes),
+        rep.ledger.total_runs,
+        drive_rows,
+        rec_items,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +218,8 @@ mod tests {
         assert_eq!(healthy.grade, "A");
         assert!(healthy.score > crit.score);
         assert_eq!(crit.critical_drives, 1);
+        let html = render_digest_html(&crit);
+        assert!(html.contains("<!doctype html>"));
+        assert!(html.contains("CRITICAL"));
     }
 }
