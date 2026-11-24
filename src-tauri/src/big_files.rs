@@ -215,6 +215,54 @@ fn build_tree(root: &Path, totals: &HashMap<PathBuf, (u64, u64)>) -> Option<DirN
     totals.contains_key(root).then(|| node(root, root, totals))
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct ExtensionBucket {
+    pub ext: String,
+    pub category: String,
+    pub files: u64,
+    pub bytes: u64,
+    pub share_pct: f64,
+}
+
+fn extension_category(ext: &str) -> &'static str {
+    match ext {
+        "safetensors" | "gguf" | "ckpt" | "pt" | "pth" | "onnx" | "bin" | "mlx" => "ai-model",
+        "vhdx" | "vhd" | "vdi" | "vmdk" | "qcow2" | "iso" | "img" => "vm-disk",
+        "mp4" | "mkv" | "mov" | "avi" | "webm" | "wmv" | "flv" => "video",
+        "zip" | "7z" | "rar" | "tar" | "gz" | "xz" | "zst" | "bz2" => "archive",
+        "exe" | "msi" | "msix" | "appx" | "deb" | "rpm" => "installer",
+        "log" | "dmp" | "etl" | "tmp" => "logs-dump",
+        _ => "other",
+    }
+}
+
+/// Aggregate large files by lowercase extension, sorted by descending bytes.
+pub fn summarize_extensions(files: &[BigFile], limit: usize) -> Vec<ExtensionBucket> {
+    let mut by_ext: HashMap<String, (u64, u64)> = HashMap::new();
+    let mut total_bytes = 0u64;
+    for f in files {
+        let key = if f.ext.is_empty() { "(none)".to_string() } else { f.ext.clone() };
+        let e = by_ext.entry(key).or_insert((0, 0));
+        e.0 += 1;
+        e.1 += f.bytes;
+        total_bytes += f.bytes;
+    }
+    let denom = total_bytes.max(1) as f64;
+    let mut rows: Vec<ExtensionBucket> = by_ext
+        .into_iter()
+        .map(|(ext, (count, bytes))| ExtensionBucket {
+            category: extension_category(&ext).to_string(),
+            ext,
+            files: count,
+            bytes,
+            share_pct: ((bytes as f64 / denom) * 1000.0).round() / 10.0,
+        })
+        .collect();
+    rows.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.ext.cmp(&b.ext)));
+    rows.truncate(limit.max(1));
+    rows
+}
+
 /// Quét các gốc, trả file lớn (lớn nhất trước) và bản đồ thư mục theo gốc.
 pub fn scan(roots: &[PathBuf], excluded: &[PathBuf], threshold: u64, cancel: &AtomicBool, mut on_progress: impl FnMut(&BigScan), mut on_file: impl FnMut(&BigFile)) -> BigScan {
     let mut out = BigScan::default();
@@ -266,6 +314,13 @@ mod tests {
         assert!(s.files.iter().all(|f| f.modified > 1_600_000_000), "phải đọc được ngày sửa");
         assert_eq!(s.scanned_files, 4, "vẫn đi qua mọi file để dựng bản đồ");
         assert_eq!(s.scanned_bytes, 9010);
+        let exts = summarize_extensions(&s.files, 10);
+        assert_eq!(exts.len(), 2);
+        assert_eq!(exts[0].ext, "bin");
+        assert_eq!(exts[0].category, "ai-model");
+        assert_eq!(exts[0].bytes, 7000);
+        assert_eq!(exts[1].ext, "iso");
+        assert_eq!(exts[1].category, "vm-disk");
         let _ = std::fs::remove_dir_all(&root);
     }
 

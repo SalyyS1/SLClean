@@ -198,6 +198,38 @@ function refreshBigTotals() {
     $("#big-empty").textContent = n ? t("flat.empty") : t("big.none", { b: fmtBytes(bigThreshold) });
   }
   setTabBadge("files", n, false);
+  renderBigExtStrip();
+}
+
+function renderBigExtStrip() {
+  const host = $("#big-ext-strip");
+  if (!host) return;
+  const totals = new Map();
+  for (const it of items.values()) {
+    if (it.group !== "bigfile" || it.gone) continue;
+    const m = /\.([a-z0-9]{1,12})$/i.exec(it.label || "");
+    const ext = m ? `.${m[1].toLowerCase()}` : "(none)";
+    const cur = totals.get(ext) || { count: 0, bytes: 0 };
+    cur.count += 1;
+    cur.bytes += it.bytes;
+    totals.set(ext, cur);
+  }
+  const top = [...totals.entries()].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, 8);
+  host.innerHTML = "";
+  host.hidden = bigView !== "list" || top.length === 0;
+  for (const [ext, stat] of top) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `quick__btn${bigQuery === ext ? " is-active" : ""}`;
+    btn.textContent = `${ext} · ${fmtBytes(stat.bytes)} (${stat.count})`;
+    btn.addEventListener("click", () => {
+      bigQuery = bigQuery === ext ? "" : ext;
+      const inp = $("#big-search");
+      if (inp) inp.value = bigQuery;
+      renderAll();
+    });
+    host.appendChild(btn);
+  }
 }
 
 function paintBigProgress() {
