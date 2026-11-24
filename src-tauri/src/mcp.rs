@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, ledger, project_roots, projects};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, history, ledger, project_roots, projects};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -115,6 +115,12 @@ fn tool_definitions() -> Value {
         {
             "name": "slclean_ledger_summary",
             "description": "Inspect SLClean's persistent Clean Run Ledger summary (lifetime reclaimed bytes, total runs, Recycle Bin vs Permanent counts, recent runs).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_history_diff",
+            "description": "Inspect SLClean scan history snapshots and compute what caches/artifacts grew between the two most recent scans (read-only).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         },
@@ -295,6 +301,24 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_history_diff" => {
+            let hist = history::load_default();
+            let count = hist.snapshots.len();
+            let latest_diff = if count >= 2 {
+                Some(history::diff(&hist.snapshots[count - 2], &hist.snapshots[count - 1]))
+            } else {
+                None
+            };
+            tool_outcome(
+                id,
+                json!({
+                    "snapshot_count": count,
+                    "snapshots": history::list(&hist),
+                    "latest_diff": latest_diff,
+                }),
+                false,
+            )
+        }
         "slclean_doctor" => {
             let rep = disk_health::run_default();
             tool_outcome(id, serde_json::to_value(&rep).unwrap_or_else(|_| json!({})), false)
@@ -378,7 +402,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 8);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 9);
 
         let dir = std::env::temp_dir().join("slclean_mcp_hygiene_test");
         let _ = std::fs::remove_dir_all(&dir);

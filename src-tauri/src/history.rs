@@ -120,6 +120,14 @@ pub fn list(history: &History) -> Vec<SnapshotInfo> {
         .collect()
 }
 
+pub fn load_default() -> History {
+    dirs::config_dir()
+        .map(|d| d.join("vn.salyyy.slclean").join("history.json"))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
 /// Thay đổi của một mục giữa hai mốc. `before`/`after` là byte; mục mới có `before = None`,
 /// mục đã biến mất có `after = None`.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]

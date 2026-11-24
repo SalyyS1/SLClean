@@ -507,7 +507,10 @@
       <section class="ledger-card" id="ledger-section">
         <header class="ledger-card__head">
           <h3 class="ledger-card__title" data-i18n="ledger.title">Sổ nhật ký dọn dẹp (Clean Run Ledger)</h3>
-          <span class="ledger-card__sub" id="ledger-summary-line">—</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="ledger-card__sub" id="ledger-summary-line">—</span>
+            <button type="button" class="btn btn--ghost" id="btn-ledger-csv" title="Export Clean Run Ledger to CSV">Export CSV</button>
+          </div>
         </header>
         <div class="ledger-stats" id="ledger-stats"></div>
         <ol class="ledger-list" id="ledger-runs"></ol>

@@ -221,6 +221,20 @@ function snapshotItems() {
 }
 
 $("#hist-from").addEventListener("change", loadHistoryDiff);
+if ($("#btn-ledger-csv")) {
+  $("#btn-ledger-csv").addEventListener("click", () => {
+    const runs = (cleanLedger && cleanLedger.runs) || [];
+    const escCsv = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+    const lines = ["run_id,timestamp,mode,source,total_freed_bytes,total_removed,total_skipped,recoverable"];
+    for (const r of runs) {
+      lines.push([r.run_id, r.timestamp, r.to_trash ? "trash" : "permanent", r.source || "ui", r.total_freed || 0, r.total_removed || 0, r.total_skipped || 0, !!r.recoverable_via_trash].map(escCsv).join(","));
+    }
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-clean-ledger.csv", "text/csv;charset=utf-8", lines.join("\n"));
+      toast("Exported slclean-clean-ledger.csv");
+    }
+  });
+}
 for (const b of document.querySelectorAll("[data-hist-filter]")) {
   b.addEventListener("click", () => { histFilter = b.dataset.histFilter; renderHistory(); });
 }
