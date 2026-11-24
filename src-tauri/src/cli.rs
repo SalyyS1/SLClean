@@ -39,6 +39,7 @@ pub enum CliCommand {
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
         report_html: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     ScanHygiene {
@@ -367,6 +368,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             max_reclaimable_gb,
             sarif: sarif_out,
             report_html,
+            badge_json,
             out,
         })),
         Some("scan-hygiene") => Ok(Some(CliCommand::ScanHygiene {
@@ -1009,6 +1011,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             max_reclaimable_gb,
             sarif,
             report_html,
+            badge_json,
             out,
         } => {
             let plan = if roots.is_empty() {
@@ -1033,6 +1036,24 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 let led = ledger::load_default().summary();
                 let html = report_export::render_html(&[], Some(&proj_report), Some(&led), now);
                 write_file_creating_dirs(html_path, &html)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let stale_gb = proj_report.stale_reclaimable_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+                let color = if stale_gb >= 10.0 {
+                    "red"
+                } else if stale_gb >= 2.0 {
+                    "yellow"
+                } else {
+                    "brightgreen"
+                };
+                let badge = serde_json::json!({
+                    "schemaVersion": 1,
+                    "label": "slclean stale builds",
+                    "message": format!("{:.2} GiB ({} projects)", stale_gb, proj_report.project_count),
+                    "color": color,
+                });
+                let btxt = serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?;
+                write_file_creating_dirs(badge_path, &btxt)?;
             }
             let json = serde_json::to_string_pretty(&proj_report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
@@ -1272,6 +1293,7 @@ mod tests {
             max_reclaimable_gb: Some(1.0),
             sarif: Some(proj_sarif.clone()),
             report_html: Some(proj_html.clone()),
+            badge_json: None,
             out: Some(proj_json.clone()),
         })
         .unwrap();
