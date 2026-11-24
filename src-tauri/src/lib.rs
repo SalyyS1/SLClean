@@ -12,6 +12,7 @@ mod catalog_dynamic;
 mod catalog_specs;
 mod cleaner;
 pub mod cli;
+pub mod dead_links;
 mod drives;
 mod duplicates;
 mod elevation;
@@ -19,14 +20,17 @@ pub mod env_reclaimer;
 mod history;
 #[cfg(windows)]
 mod installed_apps;
+pub mod ledger;
 #[cfg(windows)]
 mod leftovers;
 mod parallel;
 mod project_roots;
+pub mod projects;
 #[cfg(windows)]
 mod recycle_bin;
 #[cfg(windows)]
 mod registry;
+pub mod report_export;
 pub mod sarif;
 mod settings;
 #[cfg(windows)]
@@ -159,17 +163,99 @@ fn project_roots(app: AppHandle) -> RootsInfo {
 #[tauri::command]
 async fn clean(app: AppHandle, items: Vec<cleaner::CleanItem>, to_trash: bool) -> Result<Vec<cleaner::CleanResult>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        items
+        let results: Vec<cleaner::CleanResult> = items
             .iter()
             .map(|item| {
                 let r = cleaner::clean_one(item, to_trash);
                 let _ = app.emit("clean-progress", &r);
                 r
             })
-            .collect()
+            .collect();
+        let _ = ledger::append_default(&items, &results, to_trash, elevation::is_elevated(), "gui");
+        results
     })
     .await
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_clean_ledger() -> ledger::CleanLedger {
+    ledger::load_default()
+}
+
+#[tauri::command]
+fn clean_ledger_summary() -> ledger::LedgerSummary {
+    ledger::load_default().summary()
+}
+
+#[tauri::command]
+async fn scan_projects(app: AppHandle, state: State<'_, ScanState>, stale_days: Option<u64>) -> Result<projects::ProjectScanReport, String> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+    let settings = settings::load(&app);
+    let threshold = stale_days.unwrap_or(projects::DEFAULT_STALE_PROJECT_DAYS);
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(roots) = catalog::Roots::detect() else {
+            return projects::group_artifacts_by_project(&[], threshold, None);
+        };
+        let catalog_paths: Vec<PathBuf> = catalog::existing_entries()
+            .into_iter()
+            .filter(|e| e.group != "temp")
+            .flat_map(|e| e.paths)
+            .collect();
+        let plan = project_roots::plan(&roots, &settings, &catalog_paths);
+        let found = artifacts::find_artifacts(&plan, &cancel, |_| {});
+        projects::group_artifacts_by_project(&found, threshold, None)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn scan_hygiene(roots: Vec<PathBuf>) -> Result<dead_links::HygieneReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let effective = if roots.is_empty() {
+            dirs::home_dir().into_iter().collect()
+        } else {
+            roots
+        };
+        dead_links::scan(&effective, 5)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_audit_report(format: String, path: PathBuf) -> Result<String, String> {
+    let cancel = AtomicBool::new(false);
+    let entries = catalog::existing_entries();
+    let items: Vec<CatalogItem> = parallel::map(entries, parallel::default_workers(), |entry| {
+        let mut total = sizer::DirStats::default();
+        for p in &entry.paths {
+            let st = sizer::dir_stats(p, &cancel);
+            total.bytes += st.bytes;
+            total.files += st.files;
+            total.denied += st.denied;
+        }
+        CatalogItem { entry, bytes: total.bytes, files: total.files, denied: total.denied }
+    });
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let content = if format.eq_ignore_ascii_case("csv") {
+        report_export::render_csv(&items, &[])
+    } else {
+        let summary = ledger::load_default().summary();
+        report_export::render_html(&items, None, Some(&summary), now)
+    };
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -493,7 +579,12 @@ pub fn run() {
             remove_startup_entry,
             record_snapshot,
             history_list,
-            history_diff
+            history_diff,
+            list_clean_ledger,
+            clean_ledger_summary,
+            scan_projects,
+            scan_hygiene,
+            export_audit_report
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

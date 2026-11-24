@@ -17,6 +17,10 @@ pub struct Settings {
     pub excluded_roots: Vec<PathBuf>,
     /// Mặc định đưa vào Thùng rác thay vì xoá thẳng.
     pub to_trash: bool,
+    /// Chế độ Đơn giản: ẩn nhãn kỹ thuật, hiện giải thích thân thiện (không bao giờ tự tick dữ liệu người dùng).
+    pub simple_mode: bool,
+    /// Ngưỡng chỗ trống tối thiểu tùy chọn (GB) để cảnh báo / kiểm tra ngân sách ổ đĩa.
+    pub free_space_budget_gb: Option<u64>,
 }
 
 #[cfg(windows)]

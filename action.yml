@@ -7,7 +7,7 @@ branding:
 
 inputs:
   mode:
-    description: "Audit mode: scan-envs, scan-dupes, or scan-json"
+    description: "Audit mode: scan-envs, scan-dupes, scan-projects, scan-hygiene, or scan-json"
     required: false
     default: "scan-envs"
   stale-days:
@@ -33,7 +33,7 @@ inputs:
   version:
     description: "SLClean release tag to download on Windows runners"
     required: false
-    default: "v0.6.0"
+    default: "v0.7.0"
 
 outputs:
   sarif-file:

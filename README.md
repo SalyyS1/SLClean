@@ -156,18 +156,27 @@ After every completed scan, SLClean saves a compact snapshot recording per-drive
 
 Clicking **`Run as administrator`** in the bottom-left corner relaunches SLClean elevated via Windows UAC and hands off cleanly from the non-elevated instance (`--after-pid`). While running as a standard user, system-scoped items (`Windows\Temp`, Windows Update caches, `Windows.old`, `HKLM` dead entries, machine-wide startup items) remain visibly measured with locked checkboxes rather than failing mid-cleanup.
 
-### Headless CLI Audit Mode (v0.4.0+)
+### Headless CLI Audit Mode, Project Reclaimer, Clean Ledger & HTML/CSV Reports (v0.7.0+)
 
 SLClean can also run headlessly from PowerShell, Command Prompt, or CI scripts without opening a WebView2 window:
 
 ```powershell
-# Export read-only parallel cache + build artifact audit as JSON
-.\SLClean-portable.exe --scan-json --include-artifacts --out disk-audit.json
+# Export read-only parallel cache + build artifact audit as JSON, SARIF, HTML, and CSV
+.\SLClean-portable.exe --scan-json --include-artifacts --sarif audit.sarif --report-html audit.html --report-csv audit.csv --out disk-audit.json
+
+# Group build artifacts by project with .git HEAD/refs mtime inactivity detection (SLC009)
+.\SLClean-portable.exe --scan-projects --stale-days 30 --sarif projects.sarif --report-html projects.html
+
+# Detect empty leaf folders and dangling symlinks/shortcuts safely (SLC010)
+.\SLClean-portable.exe --scan-hygiene --sarif hygiene.sarif
+
+# Inspect persistent Clean Run Ledger & lifetime bytes freed
+.\SLClean-portable.exe --ledger
 
 # Preview Safe caches eligible for cleanup (read-only dry-run by default)
 .\SLClean-portable.exe --clean-safe --dry-run
 
-# Clean only Safe caches (requires explicit --confirm-delete; optional --trash)
+# Clean only Safe caches (records into clean-ledger.json; requires --confirm-delete; optional --trash)
 .\SLClean-portable.exe --clean-safe --confirm-delete --trash
 
 # Dump all compiled static detection rules as JSON

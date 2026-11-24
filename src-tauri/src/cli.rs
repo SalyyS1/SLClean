@@ -4,8 +4,9 @@
 //! enforce CI runner disk budgets (`--max-reclaimable-gb`), or preview/execute safe cleanups.
 
 use crate::{
-    artifacts, blob_dupes, catalog, catalog_specs, cleaner, drives, elevation, env_reclaimer,
-    parallel, project_roots, sarif, settings, sizer,
+    artifacts, blob_dupes, catalog, catalog_specs, cleaner, dead_links, drives, elevation,
+    env_reclaimer, ledger, parallel, project_roots, projects, report_export, sarif, settings,
+    sizer,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -28,6 +29,24 @@ pub enum CliCommand {
         include_artifacts: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
+        report_csv: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    ScanProjects {
+        roots: Vec<PathBuf>,
+        stale_days: u64,
+        max_reclaimable_gb: Option<f64>,
+        sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    ScanHygiene {
+        roots: Vec<PathBuf>,
+        sarif: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    Ledger {
         out: Option<PathBuf>,
     },
     ScanDupes {
@@ -151,6 +170,8 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
     let mut min_dupe_bytes: u64 = blob_dupes::DEFAULT_MIN_BLOB_BYTES;
     let mut max_reclaimable_gb: Option<f64> = None;
     let mut sarif_out: Option<PathBuf> = None;
+    let mut report_html: Option<PathBuf> = None;
+    let mut report_csv: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
 
     let mut i = 0;
@@ -162,6 +183,9 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-json" => mode = Some("scan-json"),
             "--scan-dupes" => mode = Some("scan-dupes"),
             "--scan-envs" => mode = Some("scan-envs"),
+            "--scan-projects" => mode = Some("scan-projects"),
+            "--scan-hygiene" => mode = Some("scan-hygiene"),
+            "--ledger" => mode = Some("ledger"),
             "--clean-safe" => mode = Some("clean-safe"),
             "--include-artifacts" => include_artifacts = true,
             "--trust-cas-names" => trust_cas_names = true,
@@ -169,7 +193,21 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--dry-run" => explicit_dry_run = true,
             "--confirm-delete" => confirm_delete = true,
             "--trash" => to_trash = true,
-            "--env-root" => {
+            "--report-html" => {
+                i += 1;
+                let Some(p) = args.get(i) else {
+                    return Err("missing path after --report-html".into());
+                };
+                report_html = Some(PathBuf::from(p));
+            }
+            "--report-csv" => {
+                i += 1;
+                let Some(p) = args.get(i) else {
+                    return Err("missing path after --report-csv".into());
+                };
+                report_csv = Some(PathBuf::from(p));
+            }
+            "--env-root" | "--project-root" | "--hygiene-root" => {
                 i += 1;
                 let Some(p) = args.get(i) else {
                     return Err("missing directory after --env-root".into());
@@ -249,8 +287,24 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             include_artifacts,
             max_reclaimable_gb,
             sarif: sarif_out,
+            report_html,
+            report_csv,
             out,
         })),
+        Some("scan-projects") => Ok(Some(CliCommand::ScanProjects {
+            roots: env_roots,
+            stale_days,
+            max_reclaimable_gb,
+            sarif: sarif_out,
+            report_html,
+            out,
+        })),
+        Some("scan-hygiene") => Ok(Some(CliCommand::ScanHygiene {
+            roots: env_roots,
+            sarif: sarif_out,
+            out,
+        })),
+        Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -342,12 +396,18 @@ pub fn help_text() -> String {
            slclean                           Launch interactive desktop UI (Windows)\n  \
            slclean --version                 Print version and exit\n  \
            slclean --list-specs              Print all static detection rules as JSON\n  \
-           slclean --scan-json [OPTIONS]     Run read-only parallel cache scan as JSON/SARIF\n  \
+           slclean --scan-json [OPTIONS]     Run read-only parallel cache scan as JSON/SARIF/HTML/CSV\n  \
            slclean --scan-dupes [OPTIONS]    Audit duplicate HuggingFace/Ollama/artifact blobs\n  \
            slclean --scan-envs [OPTIONS]     Audit or reclaim orphaned/stale envs & targets\n  \
+           slclean --scan-projects [OPTIONS] Group build artifacts by project with .git mtime staleness\n  \
+           slclean --scan-hygiene [OPTIONS]  Find empty leaf directories and dangling symlinks\n  \
+           slclean --ledger [OPTIONS]        Inspect persistent cleanup audit ledger & lifetime freed\n  \
            slclean --clean-safe [OPTIONS]    Preview or clean safe caches as JSON\n\n\
          OPTIONS:\n  \
            --include-artifacts        Include project build artifacts in --scan-json\n  \
+           --report-html <FILE>       Export single-file HTML executive audit report\n  \
+           --report-csv <FILE>        Export RFC 4180 CSV audit spreadsheet\n  \
+           --project-root <DIR>       Root directory for --scan-projects / --scan-hygiene\n  \
            --dupes-root <DIR>         Scan DIR for duplicate blobs (repeatable; defaults to AI caches)\n  \
            --min-dupe-mb <MB>         Minimum blob size in MiB for --scan-dupes (default: 4)\n  \
            --trust-cas-names          Use verified sha256-<hex> / blobs/<hex> digests without re-reading\n  \
@@ -385,6 +445,8 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             include_artifacts,
             max_reclaimable_gb,
             sarif,
+            report_html,
+            report_csv,
             out,
         } => {
             let catalog_items = measure_catalog();
@@ -428,6 +490,20 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
+            if let Some(html_path) = report_html.as_ref() {
+                let proj_rep = if found_artifacts.is_empty() {
+                    None
+                } else {
+                    Some(projects::group_artifacts_by_project(&found_artifacts, projects::DEFAULT_STALE_PROJECT_DAYS, Some(scanned_at)))
+                };
+                let led = ledger::load_default().summary();
+                let html = report_export::render_html(&catalog_items, proj_rep.as_ref(), Some(&led), scanned_at);
+                write_file_creating_dirs(html_path, &html)?;
+            }
+            if let Some(csv_path) = report_csv.as_ref() {
+                let csv = report_export::render_csv(&catalog_items, &found_artifacts);
+                write_file_creating_dirs(csv_path, &csv)?;
+            }
             let budget_exceeded = budget_gate.as_ref().map(|g| g.exceeded).unwrap_or(false);
             let report = CliScanReport {
                 version: env!("CARGO_PKG_VERSION"),
@@ -605,6 +681,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             let total_candidate_bytes: u64 = candidates.iter().map(|c| c.bytes).sum();
             let mut results = Vec::new();
             if !dry_run {
+                let mut reqs = Vec::new();
                 for it in &eligible {
                     let req = cleaner::CleanItem {
                         id: it.entry.id.clone(),
@@ -612,7 +689,9 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                         keep_root: it.entry.keep_root,
                     };
                     results.push(cleaner::clean_one(&req, to_trash));
+                    reqs.push(req);
                 }
+                let _ = ledger::append_default(&reqs, &results, to_trash, elevated, "cli");
             }
             let freed_bytes: u64 = results.iter().map(|r| r.freed).sum();
             let removed_entries: u64 = results.iter().map(|r| r.removed).sum();
@@ -632,6 +711,69 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             };
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::ScanProjects {
+            roots,
+            stale_days,
+            max_reclaimable_gb,
+            sarif,
+            report_html,
+            out,
+        } => {
+            let plan = if roots.is_empty() {
+                let saved = settings::load_offline();
+                if let Some(r) = catalog::Roots::detect() {
+                    project_roots::plan(&r, &saved, &[])
+                } else {
+                    project_roots::ScanPlan { roots: Vec::new(), excluded: Vec::new() }
+                }
+            } else {
+                project_roots::ScanPlan { roots, excluded: Vec::new() }
+            };
+            let found = artifacts::find_artifacts(&plan, &Arc::new(AtomicBool::new(false)), |_| {});
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let proj_report = projects::group_artifacts_by_project(&found, stale_days, Some(now));
+            let budget_gate = max_reclaimable_gb.map(|gb| sarif::BudgetGate::evaluate(gb, proj_report.stale_reclaimable_bytes));
+            if let Some(sarif_path) = sarif.as_ref() {
+                let doc = sarif::build_projects_sarif(&proj_report, budget_gate.as_ref());
+                write_file_creating_dirs(sarif_path, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)?;
+            }
+            if let Some(html_path) = report_html.as_ref() {
+                let led = ledger::load_default().summary();
+                let html = report_export::render_html(&[], Some(&proj_report), Some(&led), now);
+                write_file_creating_dirs(html_path, &html)?;
+            }
+            let json = serde_json::to_string_pretty(&proj_report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            if budget_gate.as_ref().map(|g| g.exceeded).unwrap_or(false) {
+                return Ok(EXIT_BUDGET_EXCEEDED);
+            }
+            Ok(0)
+        }
+        CliCommand::ScanHygiene { roots, sarif, out } => {
+            let effective = if roots.is_empty() {
+                dirs::home_dir().into_iter().collect()
+            } else {
+                roots
+            };
+            let report = dead_links::scan(&effective, 5);
+            if let Some(sarif_path) = sarif.as_ref() {
+                let doc = sarif::build_hygiene_sarif(&report);
+                write_file_creating_dirs(sarif_path, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)?;
+            }
+            let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::Ledger { out } => {
+            let led = ledger::load_default();
+            let payload = serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "summary": led.summary(),
+                "runs": led.runs,
+            });
+            emit_output(&serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?, out.as_ref())?;
             Ok(0)
         }
     }
@@ -691,6 +833,8 @@ mod tests {
                 include_artifacts: true,
                 max_reclaimable_gb: Some(12.5),
                 sarif: Some(PathBuf::from("audit.sarif")),
+                report_html: None,
+                report_csv: None,
                 out: Some(PathBuf::from("report.json")),
             })
         );
@@ -809,6 +953,53 @@ mod tests {
         assert!(parse_args(&vec_str(&["--scan-dupes", "--max-reclaimable-gb", "-1"])).is_err());
         assert!(parse_args(&vec_str(&["--max-reclaimable-gb", "5"])).is_err());
         assert!(parse_args(&vec_str(&["--scan-envs", "--stale-days", "abc"])).is_err());
+    }
+
+    #[test]
+    fn scan_projects_hygiene_and_html_report_end_to_end() {
+        let root = std::env::temp_dir().join(format!("slclean-cli-v070-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        let proj = root.join("old-rust-plugin");
+        let target_dir = proj.join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+        std::fs::write(proj.join("Cargo.toml"), b"[package]\nname = \"demo\"\n").unwrap();
+        std::fs::write(target_dir.join("artifact.bin"), vec![0x42u8; 32 * 1024]).unwrap();
+
+        let empty_leaf = root.join("empty-folder");
+        std::fs::create_dir_all(&empty_leaf).unwrap();
+
+        let proj_json = root.join("out/projects.json");
+        let proj_sarif = root.join("out/projects.sarif");
+        let proj_html = root.join("out/projects.html");
+        let code = execute_command(CliCommand::ScanProjects {
+            roots: vec![root.clone()],
+            stale_days: 0,
+            max_reclaimable_gb: Some(1.0),
+            sarif: Some(proj_sarif.clone()),
+            report_html: Some(proj_html.clone()),
+            out: Some(proj_json.clone()),
+        })
+        .unwrap();
+        assert_eq!(code, 0);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&proj_json).unwrap()).unwrap();
+        assert_eq!(parsed["project_count"].as_u64(), Some(1));
+        assert!(std::fs::read_to_string(&proj_html).unwrap().contains("old-rust-plugin"));
+        assert!(std::fs::read_to_string(&proj_sarif).unwrap().contains("SLC009"));
+
+        let hyg_json = root.join("out/hygiene.json");
+        let hyg_sarif = root.join("out/hygiene.sarif");
+        let h_code = execute_command(CliCommand::ScanHygiene {
+            roots: vec![root.clone()],
+            sarif: Some(hyg_sarif.clone()),
+            out: Some(hyg_json.clone()),
+        })
+        .unwrap();
+        assert_eq!(h_code, 0);
+        assert!(std::fs::read_to_string(&hyg_sarif).unwrap().contains("SLC010"));
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

@@ -5,7 +5,7 @@
 //! findings directly to GitHub Code Scanning (`github/codeql-action/upload-sarif`) or fail builds
 //! with exit code `3` when `--max-reclaimable-gb` is exceeded.
 
-use crate::{artifacts, blob_dupes, catalog, env_reclaimer};
+use crate::{artifacts, blob_dupes, catalog, dead_links, env_reclaimer, projects};
 use serde::Serialize;
 use std::path::Path;
 
@@ -199,6 +199,22 @@ fn rules_catalog() -> Vec<SarifRule> {
                 text: "Dormant container/BuildKit image layer or lock-guarded WSL2/Docker .vhdx virtual disk.".into(),
             },
             help_uri: "https://github.com/SalyyS1/SLClean#orphaned-environment--container-layer-reclaimer",
+        },
+        SarifRule {
+            id: "SLC009",
+            name: "StaleProjectArtifacts",
+            short_description: SarifMessage {
+                text: "Inactive project repository retaining gigabytes of rebuildable build artifacts (detected via .git mtime).".into(),
+            },
+            help_uri: "https://github.com/SalyyS1/SLClean#project-centric-reclaimer",
+        },
+        SarifRule {
+            id: "SLC010",
+            name: "BrokenShortcutOrEmptyDir",
+            short_description: SarifMessage {
+                text: "Dangling symlink, dead shortcut, or empty leaf directory detected during hygiene scan.".into(),
+            },
+            help_uri: "https://github.com/SalyyS1/SLClean#hygiene-scanner",
         },
     ]
 }
@@ -444,6 +460,94 @@ pub fn build_dupes_sarif(report: &blob_dupes::BlobDupReport, budget: Option<&Bud
         });
     }
 
+    SarifLog {
+        schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: vec![SarifRun {
+            tool: SarifTool {
+                driver: SarifDriver {
+                    name: "SLClean",
+                    version: env!("CARGO_PKG_VERSION"),
+                    information_uri: "https://github.com/SalyyS1/SLClean",
+                    rules: rules_catalog(),
+                },
+            },
+            results,
+        }],
+    }
+}
+
+pub fn build_projects_sarif(report: &projects::ProjectScanReport, budget: Option<&BudgetGate>) -> SarifLog {
+    let mut results = Vec::new();
+    if let Some(gate) = budget {
+        if let Some(r) = budget_result(gate) {
+            results.push(r);
+        }
+    }
+    for proj in &report.projects {
+        if !proj.stale || proj.total_bytes == 0 {
+            continue;
+        }
+        let kinds: Vec<&str> = proj.artifacts.iter().map(|a| a.kind.as_str()).collect();
+        results.push(SarifResult {
+            rule_id: "SLC009",
+            level: "warning",
+            message: SarifMessage {
+                text: format!(
+                    "Stale project '{}' ({} days inactive) retains {} across [{}].",
+                    proj.name,
+                    proj.inactive_days,
+                    format_bytes(proj.total_bytes),
+                    kinds.join(", ")
+                ),
+            },
+            locations: vec![SarifLocation {
+                physical_location: SarifPhysicalLocation {
+                    artifact_location: SarifArtifactLocation {
+                        uri: path_to_uri(&proj.project),
+                    },
+                },
+            }],
+            related_locations: None,
+        });
+    }
+    SarifLog {
+        schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: vec![SarifRun {
+            tool: SarifTool {
+                driver: SarifDriver {
+                    name: "SLClean",
+                    version: env!("CARGO_PKG_VERSION"),
+                    information_uri: "https://github.com/SalyyS1/SLClean",
+                    rules: rules_catalog(),
+                },
+            },
+            results,
+        }],
+    }
+}
+
+pub fn build_hygiene_sarif(report: &dead_links::HygieneReport) -> SarifLog {
+    let results = report
+        .findings
+        .iter()
+        .map(|f| SarifResult {
+            rule_id: "SLC010",
+            level: "note",
+            message: SarifMessage {
+                text: format!("{:?}: {}", f.kind, f.detail),
+            },
+            locations: vec![SarifLocation {
+                physical_location: SarifPhysicalLocation {
+                    artifact_location: SarifArtifactLocation {
+                        uri: path_to_uri(&f.path),
+                    },
+                },
+            }],
+            related_locations: None,
+        })
+        .collect();
     SarifLog {
         schema: "https://json.schemastore.org/sarif-2.1.0.json",
         version: "2.1.0",

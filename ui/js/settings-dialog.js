@@ -42,11 +42,20 @@ function renderSettings() {
   renderList("#roots-extra", draft.extra_roots, true, (p) => { draft.extra_roots = draft.extra_roots.filter((x) => x !== p); renderSettings(); });
   renderList("#roots-excluded", draft.excluded_roots, true, (p) => { draft.excluded_roots = draft.excluded_roots.filter((x) => x !== p); renderSettings(); });
   $("#set-trash").checked = !!draft.to_trash;
+  const simpleBox = $("#set-simple");
+  if (simpleBox) simpleBox.checked = !!draft.simple_mode;
 }
 
 async function openSettings() {
   const [s, r] = await Promise.all([invoke("get_settings"), invoke("project_roots")]);
-  draft = { language: s.language ?? null, extra_roots: [...(s.extra_roots || [])], excluded_roots: [...(s.excluded_roots || [])], to_trash: !!s.to_trash };
+  draft = {
+    language: s.language ?? null,
+    extra_roots: [...(s.extra_roots || [])],
+    excluded_roots: [...(s.excluded_roots || [])],
+    to_trash: !!s.to_trash,
+    simple_mode: !!s.simple_mode,
+    free_space_budget_gb: s.free_space_budget_gb ?? null,
+  };
   rootsInfo = r;
   renderSettings();
   $("#settings").showModal();
@@ -68,6 +77,7 @@ async function saveSettings() {
   const next = await invoke("ui_language");
   if (next !== lang) setLanguage(next);
   $("#to-trash").checked = draft.to_trash;
+  document.body.classList.toggle("is-simple", !!draft.simple_mode);
   toast(rootsChanged ? t("toast.rescanHint") : t("toast.settingsSaved"));
 }
 
@@ -78,6 +88,9 @@ for (const r of document.querySelectorAll('input[name="lang"]')) {
   r.addEventListener("change", () => { draft.language = r.value === "system" ? null : r.value; });
 }
 $("#set-trash").addEventListener("change", (e) => { draft.to_trash = e.target.checked; });
+if ($("#set-simple")) {
+  $("#set-simple").addEventListener("change", (e) => { draft.simple_mode = e.target.checked; });
+}
 $("#settings").addEventListener("close", () => {
   if ($("#settings").returnValue === "save") saveSettings().catch((e) => toast(String(e)));
 });
