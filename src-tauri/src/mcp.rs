@@ -218,8 +218,36 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_startup_sarif",
+            "description": "Audit startup entries and export heavy/stale (SLC014) and broken executable (SLC015) boot-impact findings as OASIS SARIF v2.1.0 JSON (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "command": { "type": "string" },
+                                "enabled": { "type": "boolean", "default": true },
+                                "broken": { "type": "boolean", "default": false },
+                                "system": { "type": "boolean", "default": false },
+                                "stale": { "type": "boolean", "default": false }
+                            },
+                            "required": ["name", "command"]
+                        }
+                    },
+                    "verify_local_paths": { "type": "boolean", "default": false }
+                },
+                "required": ["entries"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
-            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC013).",
+            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         }
@@ -563,13 +591,42 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_startup_sarif" => {
+            let Some(arr) = args.and_then(|a| a.get("entries")).and_then(|v| v.as_array()) else {
+                return tool_outcome(id, json!({ "error": "'entries' must be an array of startup entry objects." }), true);
+            };
+            let verify_paths = args
+                .and_then(|a| a.get("verify_local_paths"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut inputs = Vec::with_capacity(arr.len());
+            for item in arr {
+                if let Ok(parsed) = serde_json::from_value::<startup_audit::StartupAuditInput>(item.clone()) {
+                    inputs.push(parsed);
+                }
+            }
+            let rep = startup_audit::audit_entries(&inputs, verify_paths);
+            let sarif = startup_audit::render_startup_sarif(&rep, env!("CARGO_PKG_VERSION"));
+            tool_outcome(
+                id,
+                json!({
+                    "grade": rep.grade,
+                    "boot_health_score": rep.boot_health_score,
+                    "high_impact_count": rep.high_impact_count,
+                    "broken_count": rep.broken_count,
+                    "sarif_bytes": sarif.len(),
+                    "sarif": sarif,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013"],
+                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013","SLC014","SLC015"],
                     "specs": specs,
                 }),
                 false,
@@ -642,7 +699,27 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 16);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 17);
+
+        let startup_sarif_call = json!({
+            "jsonrpc": "2.0",
+            "id": 23,
+            "method": "tools/call",
+            "params": {
+                "name": "slclean_export_startup_sarif",
+                "arguments": {
+                    "entries": [
+                        { "name": "Discord", "command": "Discord.exe", "enabled": true, "stale": true },
+                        { "name": "Ghost", "command": "C:\\Missing\\ghost.exe", "enabled": true, "broken": true }
+                    ]
+                }
+            }
+        });
+        let startup_sarif_resp: Value = serde_json::from_str(&handle_message(&startup_sarif_call.to_string()).unwrap()).unwrap();
+        assert_eq!(startup_sarif_resp["result"]["isError"], false);
+        let startup_sarif_txt = startup_sarif_resp["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(startup_sarif_txt.contains("SLC014"));
+        assert!(startup_sarif_txt.contains("SLC015"));
 
         let doc_sarif_call = json!({
             "jsonrpc": "2.0",
