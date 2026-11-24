@@ -45,6 +45,7 @@ pub enum CliCommand {
     ScanHygiene {
         roots: Vec<PathBuf>,
         sarif: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     Ledger {
@@ -376,6 +377,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         Some("scan-hygiene") => Ok(Some(CliCommand::ScanHygiene {
             roots: env_roots,
             sarif: sarif_out,
+            badge_json,
             out,
         })),
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
@@ -1092,7 +1094,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             }
             Ok(0)
         }
-        CliCommand::ScanHygiene { roots, sarif, out } => {
+        CliCommand::ScanHygiene { roots, sarif, badge_json, out } => {
             let effective = if roots.is_empty() {
                 dirs::home_dir().into_iter().collect()
             } else {
@@ -1102,6 +1104,17 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             if let Some(sarif_path) = sarif.as_ref() {
                 let doc = sarif::build_hygiene_sarif(&report);
                 write_file_creating_dirs(sarif_path, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let total = report.empty_dir_count + report.broken_link_count;
+                let color = if report.broken_link_count > 0 { "red" } else if total > 0 { "yellow" } else { "brightgreen" };
+                let badge = serde_json::json!({
+                    "schemaVersion": 1,
+                    "label": "slclean hygiene",
+                    "message": format!("{} empty · {} broken links", report.empty_dir_count, report.broken_link_count),
+                    "color": color,
+                });
+                write_file_creating_dirs(badge_path, &serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?)?;
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
@@ -1346,6 +1359,7 @@ mod tests {
         let h_code = execute_command(CliCommand::ScanHygiene {
             roots: vec![root.clone()],
             sarif: Some(hyg_sarif.clone()),
+            badge_json: None,
             out: Some(hyg_json.clone()),
         })
         .unwrap();
