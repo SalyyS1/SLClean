@@ -268,6 +268,12 @@ fn render_digest_html_text() -> String {
 }
 
 #[tauri::command]
+fn render_startup_audit_html_text(entries: Vec<startup_audit::StartupAuditInput>) -> String {
+    let report = startup_audit::audit_entries(&entries, false);
+    startup_audit::render_startup_html(&report)
+}
+
+#[tauri::command]
 fn is_elevated() -> bool {
     elevation::is_elevated()
 }
@@ -600,7 +606,8 @@ pub fn run() {
             scan_projects,
             scan_hygiene,
             export_audit_report,
-            render_digest_html_text
+            render_digest_html_text,
+            render_startup_audit_html_text
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

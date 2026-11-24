@@ -321,6 +321,20 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_dupes_badge",
+            "description": "Scan directories for byte-identical duplicate AI model/build blobs and emit a shields.io Endpoint Badge JSON summarizing wasted MiB (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "min_dupe_bytes": { "type": "integer", "minimum": 1, "default": 1048576 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -824,6 +838,34 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_dupes_badge" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let min_dupe_bytes = args.and_then(|a| a.get("min_dupe_bytes")).and_then(|v| v.as_u64()).unwrap_or(1024 * 1024);
+            let scan = blob_dupes::scan_blobs(&roots, min_dupe_bytes, false, &AtomicBool::new(false));
+            let wasted_mb = scan.total_wasted_bytes as f64 / (1024.0 * 1024.0);
+            let color = if wasted_mb >= 2048.0 { "red" } else if wasted_mb >= 256.0 { "yellow" } else { "brightgreen" };
+            tool_outcome(
+                id,
+                json!({
+                    "duplicate_group_count": scan.groups.len(),
+                    "total_wasted_bytes": scan.total_wasted_bytes,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean dupes",
+                        "message": format!("{:.1} MiB ({} groups)", wasted_mb, scan.groups.len()),
+                        "color": color,
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -903,7 +945,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 22);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 23);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",

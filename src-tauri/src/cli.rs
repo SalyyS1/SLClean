@@ -87,6 +87,7 @@ pub enum CliCommand {
         trust_cas_names: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     ScanEnvs {
@@ -411,6 +412,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             trust_cas_names,
             max_reclaimable_gb,
             sarif: sarif_out,
+            badge_json,
             out,
         })),
         Some("scan-envs") => {
@@ -829,6 +831,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             trust_cas_names,
             max_reclaimable_gb,
             sarif,
+            badge_json,
             out,
         } => {
             let effective_roots = if roots.is_empty() {
@@ -849,6 +852,18 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 let sarif_doc = sarif::build_dupes_sarif(&scan, budget_gate.as_ref());
                 let sarif_json = serde_json::to_string_pretty(&sarif_doc).map_err(|e| e.to_string())?;
                 write_file_creating_dirs(sarif_path, &sarif_json)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let wasted_mb = scan.total_wasted_bytes as f64 / (1024.0 * 1024.0);
+                let color = if wasted_mb >= 2048.0 { "red" } else if wasted_mb >= 256.0 { "yellow" } else { "brightgreen" };
+                let badge = serde_json::json!({
+                    "schemaVersion": 1,
+                    "label": "slclean dupes",
+                    "message": format!("{:.1} MiB ({} groups)", wasted_mb, scan.groups.len()),
+                    "color": color,
+                });
+                let badge_str = serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?;
+                write_file_creating_dirs(badge_path, &badge_str)?;
             }
 
             let scanned_at = SystemTime::now()
@@ -1173,6 +1188,7 @@ mod tests {
                 trust_cas_names: true,
                 max_reclaimable_gb: Some(5.0),
                 sarif: None,
+                badge_json: None,
                 out: None,
             })
         );
@@ -1221,6 +1237,7 @@ mod tests {
 
         let json_out = root.join("out/dupes.json");
         let sarif_out = root.join("out/dupes.sarif");
+        let badge_out = root.join("out/dupes-badge.json");
 
         // 1. High budget (1 GiB) -> exit code 0
         let code_ok = execute_command(CliCommand::ScanDupes {
@@ -1229,10 +1246,14 @@ mod tests {
             trust_cas_names: false,
             max_reclaimable_gb: Some(1.0),
             sarif: Some(sarif_out.clone()),
+            badge_json: Some(badge_out.clone()),
             out: Some(json_out.clone()),
         })
         .unwrap();
         assert_eq!(code_ok, 0);
+        let badge_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&badge_out).unwrap()).unwrap();
+        assert_eq!(badge_val["label"].as_str(), Some("slclean dupes"));
 
         // 2. Zero budget (0.0 GiB) -> exit code 3 (EXIT_BUDGET_EXCEEDED) and SLC005 in SARIF
         let code_fail = execute_command(CliCommand::ScanDupes {
@@ -1241,6 +1262,7 @@ mod tests {
             trust_cas_names: false,
             max_reclaimable_gb: Some(0.0),
             sarif: Some(sarif_out.clone()),
+            badge_json: None,
             out: Some(json_out.clone()),
         })
         .unwrap();

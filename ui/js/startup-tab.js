@@ -186,6 +186,29 @@ async function removeStartup(e) {
 }
 
 $("#btn-start-scan").addEventListener("click", scanStartup);
+if ($("#btn-start-export-html")) {
+  $("#btn-start-export-html").addEventListener("click", async () => {
+    const entries = [...startups.values()]
+      .filter((e) => !e.gone)
+      .map((e) => ({
+        name: String(e.name || ""),
+        command: String(e.command || ""),
+        enabled: Boolean(e.enabled),
+        broken: Boolean(e.broken),
+        system: Boolean(e.system),
+        stale: isStaleStartup(e),
+      }));
+    try {
+      const html = await invoke("render_startup_audit_html_text", { entries });
+      if (typeof downloadBlob === "function") {
+        downloadBlob("slclean-startup-audit.html", "text/html;charset=utf-8", html);
+        toast(lang === "vi" ? "Đã xuất slclean-startup-audit.html" : "Exported slclean-startup-audit.html");
+      }
+    } catch (err) {
+      toast(String(err));
+    }
+  });
+}
 $("#start-search").addEventListener("input", (ev) => { startQuery = ev.target.value.trim().toLowerCase(); renderStartup(); });
 for (const b of document.querySelectorAll("[data-start-filter]")) {
   b.addEventListener("click", () => { startFilter = b.dataset.startFilter; renderStartup(); });
