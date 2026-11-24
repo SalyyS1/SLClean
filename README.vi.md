@@ -33,7 +33,7 @@ portable exe from [Releases](../../releases); the binary is unsigned, so SmartSc
 | **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |
 | **Nhật ký** | So hai lần quét và lưu **Sổ cái các lần dọn (Clean Run Ledger)** theo dõi tổng dung lượng đã giải phóng & lịch sử khôi phục Thùng rác. |
 
-> **Tính năng mới v0.15.0:** Tích hợp **Stdio MCP Server 10 công cụ chỉ-đọc (`SLClean --mcp`)** cho Claude Code / Cursor / Windsurf / Codex, lệnh **`SLClean --doctor`** chấm điểm sức khoẻ ổ đĩa A–F, **Xuất sổ cái dọn dẹp CSV**, **Cảnh báo ngưỡng dung lượng trống**, **Chế độ đơn giản (Simple Mode)** và phím tắt nhanh (`Ctrl+K` tìm kiếm, `F5` quét lại).
+> **Tính năng mới v0.16.0:** Tích hợp **Stdio MCP Server 11 công cụ chỉ-đọc (`SLClean --mcp`)** bổ sung **`slclean_audit_startup_entries`** đánh giá gánh nặng khởi động + nhãn **Heavy boot / Updater** ngay trên tab Khởi động, lệnh **`SLClean --doctor`** chấm điểm sức khoẻ ổ đĩa A–F, **Xuất sổ cái dọn dẹp CSV**, **Cảnh báo ngưỡng dung lượng trống**, **Chế độ đơn giản (Simple Mode)** và phím tắt nhanh (`Ctrl+K` tìm kiếm, `F5` quét lại).
 
 Cột trái luôn hiện dung lượng trống từng ổ, tổng đã tick, chế độ Thùng rác và nút dọn — mục
 cache, artifact và thư mục thừa dùng chung một nút đó. Tab **File lớn** và **File trùng** cũng

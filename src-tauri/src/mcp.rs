@@ -5,7 +5,7 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects, startup_audit};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -142,6 +142,34 @@ fn tool_definitions() -> Value {
             "name": "slclean_doctor",
             "description": "Compute an executive A-F workstation storage health diagnosis across all fixed drives and Clean Run Ledger history (read-only).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_audit_startup_entries",
+            "description": "Classify Windows startup entries (Run keys, Startup folders, Scheduled Tasks) by boot impact (high/medium/low/broken/protected), compute login latency overhead in ms, and return reversible recommendations (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "command": { "type": "string" },
+                                "enabled": { "type": "boolean", "default": true },
+                                "broken": { "type": "boolean", "default": false },
+                                "system": { "type": "boolean", "default": false },
+                                "stale": { "type": "boolean", "default": false }
+                            },
+                            "required": ["name", "command"]
+                        }
+                    },
+                    "verify_local_paths": { "type": "boolean", "default": false }
+                },
+                "required": ["entries"],
+                "additionalProperties": false
+            },
             "annotations": { "readOnlyHint": true }
         },
         {
@@ -354,6 +382,21 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
             let rep = disk_health::run_default();
             tool_outcome(id, serde_json::to_value(&rep).unwrap_or_else(|_| json!({})), false)
         }
+        "slclean_audit_startup_entries" => {
+            let raw_entries = args.and_then(|a| a.get("entries")).cloned().unwrap_or(Value::Null);
+            let parsed: Result<Vec<startup_audit::StartupAuditInput>, _> = serde_json::from_value(raw_entries);
+            match parsed {
+                Ok(entries) => {
+                    let verify_paths = args
+                        .and_then(|a| a.get("verify_local_paths"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let rep = startup_audit::audit_entries(&entries, verify_paths);
+                    tool_outcome(id, serde_json::to_value(&rep).unwrap_or_else(|_| json!({})), false)
+                }
+                Err(err) => tool_outcome(id, json!({ "error": format!("Invalid 'entries' array: {}", err) }), true),
+            }
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -433,7 +476,26 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 10);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 11);
+
+        let startup_call = json!({
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+                "name": "slclean_audit_startup_entries",
+                "arguments": {
+                    "entries": [
+                        { "name": "Discord", "command": "Discord.exe", "enabled": true, "stale": true },
+                        { "name": "SecurityHealth", "command": "C:\\Windows\\System32\\SecurityHealthSystray.exe", "system": true }
+                    ]
+                }
+            }
+        });
+        let startup_resp: Value = serde_json::from_str(&handle_message(&startup_call.to_string()).unwrap()).unwrap();
+        assert_eq!(startup_resp["result"]["isError"], false);
+        let startup_payload: Value = serde_json::from_str(startup_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(startup_payload["high_impact_count"], 1);
 
         let dir = std::env::temp_dir().join("slclean_mcp_hygiene_test");
         let _ = std::fs::remove_dir_all(&dir);

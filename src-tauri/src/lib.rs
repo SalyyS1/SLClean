@@ -42,6 +42,7 @@ mod single_instance;
 mod sizer;
 #[cfg(windows)]
 mod startup;
+pub mod startup_audit;
 #[cfg(windows)]
 mod store_apps;
 #[cfg(windows)]

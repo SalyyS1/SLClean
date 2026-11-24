@@ -20,11 +20,23 @@ function isStaleStartup(e) {
   return e.enabled && !e.broken && e.usage_known && isStale(e.last_used);
 }
 
+const HEAVY_BOOT_RE = /(docker|teams|discord|slack|adobe|creative cloud|ccxprocess|steam|epicgameslauncher|riotclient|battle\.net|overwolf|spotify|onedrive|dropbox|googledrivefs|postman|zoom|operagx)/i;
+const UPDATER_BOOT_RE = /(update\.exe|googleupdate|edgeupdate|adobearm|jusched|javaupdate|braveupdate|autoupdater)/i;
+
+function classifyStartupImpact(e) {
+  if (e.broken || e.system) return "none";
+  const hay = `${e.name || ""} ${e.command || ""}`;
+  if (HEAVY_BOOT_RE.test(hay)) return "heavy";
+  if (UPDATER_BOOT_RE.test(hay)) return "updater";
+  return "none";
+}
+
 function startPasses(e) {
   if (e.gone) return false;
   if (!startMatches(e)) return false;
   switch (startFilter) {
     case "on": return e.enabled;
+    case "heavy": return e.enabled && classifyStartupImpact(e) === "heavy";
     case "stale": return isStaleStartup(e);
     case "broken": return e.broken;
     default: return true;
@@ -48,6 +60,9 @@ function startRow(e) {
   li.dataset.start = e.id;
   li.classList.toggle("boot--off", !e.enabled);
   const tags = [`<b class="tag tag--src">${t(SOURCE_KEY[e.source] || "start.srcRun")}</b>`];
+  const impact = classifyStartupImpact(e);
+  if (impact === "heavy") tags.push(`<b class="tag tag--admin" title="High login impact (~1.5-3.4s)">Heavy boot</b>`);
+  else if (impact === "updater") tags.push(`<b class="tag tag--component" title="Background auto-updater">Updater</b>`);
   if (e.broken) tags.push(`<b class="tag tag--dead" title="${esc(t("start.brokenTitle"))}">${t("start.broken")}</b>`);
   if (e.system) tags.push(`<b class="tag tag--component" title="${esc(t("start.systemTitle"))}">${t("start.system")}</b>`);
   if (e.needs_admin) tags.push(`<b class="tag tag--admin" title="${esc(t("tag.adminTitle"))}">${t("tag.admin")}</b>`);
