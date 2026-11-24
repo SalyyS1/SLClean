@@ -335,6 +335,20 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_envs_badge",
+            "description": "Scan directories for orphaned/stale virtualenvs and build envs and emit a shields.io Endpoint Badge JSON (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "default": 30 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -866,6 +880,34 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_envs_badge" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let stale_days = args.and_then(|a| a.get("stale_days")).and_then(|v| v.as_u64()).unwrap_or(30);
+            let scan = env_reclaimer::scan_environments(&roots, stale_days, &AtomicBool::new(false));
+            let gb = scan.total_reclaimable_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            let color = if scan.orphan_count > 0 || gb >= 5.0 { "yellow" } else { "brightgreen" };
+            tool_outcome(
+                id,
+                json!({
+                    "orphan_count": scan.orphan_count,
+                    "total_reclaimable_bytes": scan.total_reclaimable_bytes,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean orphan envs",
+                        "message": format!("{} orphans ({:.2} GiB)", scan.orphan_count, gb),
+                        "color": color,
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -945,7 +987,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 23);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 24);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",

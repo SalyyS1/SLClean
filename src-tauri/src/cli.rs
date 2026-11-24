@@ -98,6 +98,7 @@ pub enum CliCommand {
         to_trash: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     CleanSafe {
@@ -425,6 +426,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
                 to_trash,
                 max_reclaimable_gb,
                 sarif: sarif_out,
+                badge_json,
                 out,
             }))
         }
@@ -896,6 +898,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             to_trash,
             max_reclaimable_gb,
             sarif,
+            badge_json,
             out,
         } => {
             let effective_roots = if roots.is_empty() {
@@ -934,6 +937,18 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 let sarif_json =
                     serde_json::to_string_pretty(&sarif_doc).map_err(|e| e.to_string())?;
                 write_file_creating_dirs(sarif_path, &sarif_json)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let gb = scan.total_reclaimable_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+                let color = if scan.orphan_count > 0 || gb >= 5.0 { "yellow" } else { "brightgreen" };
+                let badge = serde_json::json!({
+                    "schemaVersion": 1,
+                    "label": "slclean orphan envs",
+                    "message": format!("{} orphans ({:.2} GiB)", scan.orphan_count, gb),
+                    "color": color,
+                });
+                let badge_str = serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?;
+                write_file_creating_dirs(badge_path, &badge_str)?;
             }
 
             let scanned_at = SystemTime::now()

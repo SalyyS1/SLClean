@@ -283,6 +283,34 @@ async function scanBigFiles() {
 }
 
 $("#btn-big-scan").addEventListener("click", scanBigFiles);
+if ($("#btn-big-export-ext-html")) {
+  $("#btn-big-export-ext-html").addEventListener("click", () => {
+    const agg = new Map();
+    let totalBytes = 0;
+    let totalFiles = 0;
+    for (const it of items.values()) {
+      if (it.group !== "bigfile" || it.gone) continue;
+      const parts = String(it.label || "").split(".");
+      const ext = parts.length > 1 ? ("." + parts.pop().toLowerCase()) : "(no ext)";
+      const cur = agg.get(ext) || { ext, count: 0, bytes: 0 };
+      cur.count += 1;
+      cur.bytes += Number(it.bytes || 0);
+      agg.set(ext, cur);
+      totalBytes += Number(it.bytes || 0);
+      totalFiles += 1;
+    }
+    const rows = [...agg.values()].sort((a, b) => b.bytes - a.bytes).slice(0, 40);
+    const tr = rows.map((r) => {
+      const pct = totalBytes > 0 ? ((r.bytes * 100) / totalBytes).toFixed(1) : "0.0";
+      return `<tr><td><code>${esc(r.ext)}</code></td><td>${r.count}</td><td>${esc(fmtBytes(r.bytes))}</td><td>${pct}%</td></tr>`;
+    }).join("\n");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean File Extension Breakdown</title><style>body{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}.wrap{max-width:900px;margin:0 auto}.card{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left}th{color:#93a89b}code{font-family:ui-monospace,monospace;color:#4ade80}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Big Files Extension Breakdown</h1><p>Files: <b>${totalFiles}</b> &middot; Total Size: <b>${esc(fmtBytes(totalBytes))}</b> &middot; Extensions: <b>${agg.size}</b></p></div><div class="card"><table><thead><tr><th>Extension</th><th>Count</th><th>Total Size</th><th>Share</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-extensions-breakdown.html", "text/html;charset=utf-8", html);
+      toast(lang === "vi" ? "Đã xuất slclean-extensions-breakdown.html" : "Exported slclean-extensions-breakdown.html");
+    }
+  });
+}
 $("#btn-big-cancel").addEventListener("click", () => invoke("cancel_scan"));
 for (const b of document.querySelectorAll("[data-big-view]")) {
   b.addEventListener("click", () => { bigView = b.dataset.bigView; renderBigView(); });
