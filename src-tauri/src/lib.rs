@@ -23,6 +23,7 @@ mod installed_apps;
 pub mod ledger;
 #[cfg(windows)]
 mod leftovers;
+pub mod mcp;
 mod parallel;
 mod project_roots;
 pub mod projects;

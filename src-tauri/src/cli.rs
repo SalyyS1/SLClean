@@ -5,7 +5,7 @@
 
 use crate::{
     artifacts, blob_dupes, catalog, catalog_specs, cleaner, dead_links, drives, elevation,
-    env_reclaimer, ledger, parallel, project_roots, projects, report_export, sarif, settings,
+    env_reclaimer, ledger, mcp, parallel, project_roots, projects, report_export, sarif, settings,
     sizer,
 };
 use serde::Serialize;
@@ -49,6 +49,7 @@ pub enum CliCommand {
     Ledger {
         out: Option<PathBuf>,
     },
+    Mcp,
     ScanDupes {
         roots: Vec<PathBuf>,
         min_dupe_bytes: u64,
@@ -186,6 +187,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-projects" => mode = Some("scan-projects"),
             "--scan-hygiene" => mode = Some("scan-hygiene"),
             "--ledger" => mode = Some("ledger"),
+            "--mcp" => return Ok(Some(CliCommand::Mcp)),
             "--clean-safe" => mode = Some("clean-safe"),
             "--include-artifacts" => include_artifacts = true,
             "--trust-cas-names" => trust_cas_names = true,
@@ -774,6 +776,10 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 "runs": led.runs,
             });
             emit_output(&serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::Mcp => {
+            mcp::serve_stdio().map_err(|e| e.to_string())?;
             Ok(0)
         }
     }
