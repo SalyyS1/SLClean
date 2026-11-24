@@ -49,7 +49,11 @@ function renderSettings() {
 }
 
 async function openSettings() {
-  const [s, r] = await Promise.all([invoke("get_settings"), invoke("project_roots")]);
+  const [s, r, audit] = await Promise.all([
+    invoke("get_settings"),
+    invoke("project_roots"),
+    invoke("audit_current_settings").catch(() => null),
+  ]);
   draft = {
     language: s.language ?? null,
     extra_roots: [...(s.extra_roots || [])],
@@ -60,6 +64,19 @@ async function openSettings() {
   };
   rootsInfo = r;
   renderSettings();
+  const badge = $("#settings-health-badge");
+  if (badge) {
+    if (audit) {
+      const missing = (audit.missing_extra_roots || []).length + (audit.missing_excluded_roots || []).length;
+      const redundant = (audit.redundant_exclusions || []).length;
+      badge.hidden = false;
+      badge.textContent = audit.healthy
+        ? `Settings check: OK (${audit.extra_root_count} extra, ${audit.excluded_root_count} excluded)`
+        : `Settings check: ${missing} missing path(s), ${redundant} redundant exclusion(s) — review lists above.`;
+    } else {
+      badge.hidden = true;
+    }
+  }
   $("#settings").showModal();
 }
 

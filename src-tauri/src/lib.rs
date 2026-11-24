@@ -309,6 +309,11 @@ fn get_settings(app: AppHandle) -> settings::Settings {
 }
 
 #[tauri::command]
+fn audit_current_settings(app: AppHandle) -> settings::SettingsAudit {
+    settings::audit_settings(&settings::load(&app))
+}
+
+#[tauri::command]
 fn save_settings(app: AppHandle, settings: settings::Settings) -> Result<(), String> {
     settings::save(&app, &settings)
 }
@@ -574,6 +579,7 @@ pub fn run() {
             recycle_bin_info,
             empty_recycle_bin,
             get_settings,
+            audit_current_settings,
             save_settings,
             ui_language,
             pick_folder,
