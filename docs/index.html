@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SLClean v0.26.0 - Windows AI &amp; Developer Cache Explorer, 15-Tool MCP Server, Doctor CI Grade Gate &amp; Settings Health Check</title>
+  <title>SLClean v0.27.0 - Windows AI &amp; Developer Cache Explorer, Extension Analytics, 15-Tool MCP Server &amp; Doctor CI Gate</title>
   <meta name="description" content="Interactive rule explorer, Startup Boot-Impact Simulator, 15-tool read-only stdio MCP server (SLClean --mcp), desktop Settings exclusion path health check, CLI --doctor --fail-below-grade CI gate, --audit-startup, --scan-extensions, --plan-cleanup, Executive HTML Storage Digest, Disk Health Doctor (A-F), Squarified Disk Treemap, and CI disk-budget calculator for SLClean v0.26.0." />
   <style>
     :root {
@@ -434,6 +434,16 @@
         </thead>
         <tbody id="env-rows"></tbody>
       </table>
+    </section>
+
+    <section class="ai-calculator">
+      <h2>3B. Large File Extension Breakdown Analytics (<code>--scan-extensions</code>)</h2>
+      <p class="sub">
+        Preview how SLClean groups heavy workstation files by extension (AI weights, VM images, build archives, video captures) so you spot disk hogs in seconds.
+      </p>
+      <div class="toolbar" id="ext-presets" style="margin-bottom: 12px;"></div>
+      <div id="ext-bars" style="display: grid; gap: 8px; margin-bottom: 10px;"></div>
+      <pre id="ext-cli-preview">.\SLClean-portable.exe --scan-extensions --min-mb 100</pre>
     </section>
 
     <section class="explorer">
@@ -875,6 +885,57 @@
       bootBadge.textContent = `Boot Grade ${grade} (${score}/100)`;
     }
     renderBootSim();
+    const EXT_PROFILES = {
+      "AI Workstation": [
+        { ext: ".gguf", gb: 42.6, files: 9, tag: "Ollama / llama.cpp" },
+        { ext: ".safetensors", gb: 31.4, files: 18, tag: "HF / LoRA / ComfyUI" },
+        { ext: ".vhdx", gb: 26.0, files: 2, tag: "WSL2 / Docker (Protected)" },
+        { ext: ".whl / .tar.gz", gb: 6.2, files: 44, tag: "pip / wheel cache" },
+        { ext: ".log", gb: 2.8, files: 132, tag: "Server & IDE logs" }
+      ],
+      "Minecraft & Game Dev": [
+        { ext: ".mca / .zip", gb: 18.4, files: 64, tag: "World backups & packs" },
+        { ext: ".jar", gb: 9.7, files: 310, tag: "Gradle / Maven / Server JARs" },
+        { ext: ".mp4", gb: 14.2, files: 12, tag: "QA & shader recordings" },
+        { ext: ".iso", gb: 8.5, files: 2, tag: "OS / VM installers" },
+        { ext: ".log.gz", gb: 1.9, files: 240, tag: "Compressed server logs" }
+      ]
+    };
+    const extPresets = document.getElementById("ext-presets");
+    const extBars = document.getElementById("ext-bars");
+    const extCli = document.getElementById("ext-cli-preview");
+    function renderExtProfile(name) {
+      if (!extBars) return;
+      const rows = EXT_PROFILES[name] || EXT_PROFILES["AI Workstation"];
+      const maxGb = Math.max(...rows.map((r) => r.gb), 1);
+      extBars.innerHTML = "";
+      for (const r of rows) {
+        const pct = Math.max(4, Math.round((r.gb / maxGb) * 100));
+        const row = document.createElement("div");
+        row.style.cssText = "background:var(--panel-alt);border:1px solid var(--border);border-radius:6px;padding:8px 10px;";
+        row.innerHTML = `<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px;margin-bottom:5px;"><span><strong>${r.ext}</strong> <span style="color:var(--muted)">(${r.files} files · ${r.tag})</span></span><strong style="color:var(--accent)">${r.gb.toFixed(1)} GB</strong></div><div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${r.ext.includes('vhdx') ? 'var(--review)' : 'var(--accent)'};"></div></div>`;
+        extBars.appendChild(row);
+      }
+      if (extCli) {
+        extCli.textContent = `.\\SLClean-portable.exe --scan-extensions --min-mb ${name === "AI Workstation" ? 100 : 25}`;
+      }
+      if (extPresets) {
+        for (const b of extPresets.querySelectorAll("button")) {
+          b.className = "chip" + (b.textContent === name ? " active" : "");
+        }
+      }
+    }
+    if (extPresets) {
+      for (const k of Object.keys(EXT_PROFILES)) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.textContent = k;
+        b.onclick = () => renderExtProfile(k);
+        extPresets.appendChild(b);
+      }
+      renderExtProfile("AI Workstation");
+    }
     renderEstimator();
     renderAiCalculator();
     renderEnvReclaimer();
