@@ -235,6 +235,19 @@ if ($("#btn-ledger-csv")) {
     }
   });
 }
+if ($("#btn-digest-html")) {
+  $("#btn-digest-html").addEventListener("click", async () => {
+    try {
+      const html = await invoke("render_digest_html_text");
+      if (typeof downloadBlob === "function") {
+        downloadBlob("slclean-storage-digest.html", "text/html;charset=utf-8", html);
+        toast(lang === "vi" ? "Đã xuất slclean-storage-digest.html" : "Exported slclean-storage-digest.html");
+      }
+    } catch (err) {
+      toast(String(err));
+    }
+  });
+}
 for (const b of document.querySelectorAll("[data-hist-filter]")) {
   b.addEventListener("click", () => { histFilter = b.dataset.histFilter; renderHistory(); });
 }

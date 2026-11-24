@@ -262,6 +262,12 @@ fn export_audit_report(format: String, path: PathBuf) -> Result<String, String> 
 }
 
 #[tauri::command]
+fn render_digest_html_text() -> String {
+    let report = disk_health::run_default();
+    disk_health::render_digest_html(&report)
+}
+
+#[tauri::command]
 fn is_elevated() -> bool {
     elevation::is_elevated()
 }
@@ -587,7 +593,8 @@ pub fn run() {
             clean_ledger_summary,
             scan_projects,
             scan_hygiene,
-            export_audit_report
+            export_audit_report,
+            render_digest_html_text
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");
