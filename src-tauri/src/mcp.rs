@@ -295,6 +295,18 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_cleanup_plan_html",
+            "description": "Generate a self-contained dark-mode HTML Safe Cleanup Roadmap with strictly non-destructive dry-run CLI commands (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_free_gb": { "type": "number", "minimum": 1.0, "default": 20.0 }
+                },
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -737,6 +749,36 @@ fn handle_tool_call(id: &Value, params: Option<&serde_json::Map<String, Value>>)
                 false,
             )
         }
+        "slclean_export_cleanup_plan_html" => {
+            let target_gb = args.and_then(|a| a.get("target_free_gb")).and_then(|v| v.as_f64()).unwrap_or(20.0).max(1.0);
+            let doc = disk_health::run_default();
+            let html = format!(
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean v{} Safe Cleanup Roadmap</title>\
+<style>body{{background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif;padding:28px}}\
+.wrap{{max-width:860px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:14px}}\
+code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;border-radius:4px;color:#4ade80}}</style></head>\
+<body><div class=\"wrap\"><div class=\"card\"><h1>SLClean Safe Cleanup Roadmap (Read-Only)</h1>\
+<p>Current Disk Grade: <b>{}</b> ({}/100) &middot; Lowest Free: <b>{:.1}%</b> &middot; Target Free: <b>{:.1} GiB</b></p></div>\
+<div class=\"card\"><ol>\
+<li><b>[SAFE]</b> <code>SLClean --clean-safe --dry-run</code></li>\
+<li><b>[REBUILDABLE]</b> <code>SLClean --scan-projects --stale-days 30 --report-html slclean-projects.html</code></li>\
+<li><b>[REVIEW]</b> <code>SLClean --scan-dupes --trust-cas-names --sarif slclean-dupes.sarif</code></li>\
+<li><b>[VERIFY]</b> <code>SLClean --doctor --report-html slclean-digest.html --sarif slclean-health.sarif</code></li>\
+</ol></div></div></body></html>",
+                env!("CARGO_PKG_VERSION"), doc.grade, doc.score, doc.lowest_free_pct, target_gb
+            );
+            tool_outcome(
+                id,
+                json!({
+                    "grade": doc.grade,
+                    "score": doc.score,
+                    "target_free_gb": target_gb,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -816,7 +858,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 20);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 21);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
