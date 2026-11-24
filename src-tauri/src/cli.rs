@@ -4,9 +4,9 @@
 //! enforce CI runner disk budgets (`--max-reclaimable-gb`), or preview/execute safe cleanups.
 
 use crate::{
-    artifacts, blob_dupes, catalog, catalog_specs, cleaner, dead_links, disk_health, drives,
-    elevation, env_reclaimer, ledger, mcp, parallel, project_roots, projects, report_export,
-    sarif, settings, sizer,
+    artifacts, big_files, blob_dupes, catalog, catalog_specs, cleaner, dead_links, disk_health,
+    drives, elevation, env_reclaimer, ledger, mcp, parallel, project_roots, projects,
+    report_export, sarif, settings, sizer, startup_audit,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -51,6 +51,16 @@ pub enum CliCommand {
     },
     Doctor {
         report_html: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    AuditStartup {
+        input_json: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    ScanExtensions {
+        roots: Vec<PathBuf>,
+        min_bytes: u64,
+        limit: usize,
         out: Option<PathBuf>,
     },
     Mcp,
@@ -177,6 +187,8 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
     let mut sarif_out: Option<PathBuf> = None;
     let mut report_html: Option<PathBuf> = None;
     let mut report_csv: Option<PathBuf> = None;
+    let mut startup_file: Option<PathBuf> = None;
+    let mut ext_min_bytes: u64 = 10 * 1024 * 1024;
     let mut out: Option<PathBuf> = None;
 
     let mut i = 0;
@@ -190,6 +202,8 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-envs" => mode = Some("scan-envs"),
             "--scan-projects" => mode = Some("scan-projects"),
             "--scan-hygiene" => mode = Some("scan-hygiene"),
+            "--scan-extensions" => mode = Some("scan-extensions"),
+            "--audit-startup" => mode = Some("audit-startup"),
             "--ledger" => mode = Some("ledger"),
             "--doctor" => mode = Some("doctor"),
             "--mcp" => return Ok(Some(CliCommand::Mcp)),
@@ -200,6 +214,21 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--dry-run" => explicit_dry_run = true,
             "--confirm-delete" => confirm_delete = true,
             "--trash" => to_trash = true,
+            "--startup-file" => {
+                i += 1;
+                let Some(p) = args.get(i) else {
+                    return Err("missing JSON path after --startup-file".into());
+                };
+                startup_file = Some(PathBuf::from(p));
+            }
+            "--min-mb" => {
+                i += 1;
+                let Some(raw) = args.get(i) else {
+                    return Err("missing numeric value after --min-mb".into());
+                };
+                let mb = parse_non_negative_f64("--min-mb", raw)?;
+                ext_min_bytes = (mb * 1024.0 * 1024.0).round() as u64;
+            }
             "--report-html" => {
                 i += 1;
                 let Some(p) = args.get(i) else {
@@ -313,6 +342,16 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         })),
         Some("ledger") => Ok(Some(CliCommand::Ledger { out })),
         Some("doctor") => Ok(Some(CliCommand::Doctor { report_html, out })),
+        Some("audit-startup") => Ok(Some(CliCommand::AuditStartup {
+            input_json: startup_file,
+            out,
+        })),
+        Some("scan-extensions") => Ok(Some(CliCommand::ScanExtensions {
+            roots: env_roots,
+            min_bytes: ext_min_bytes,
+            limit: 20,
+            out,
+        })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
             roots: dupes_roots,
             min_dupe_bytes,
@@ -450,6 +489,77 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                 write_file_creating_dirs(html_path, &html)?;
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::AuditStartup { input_json, out } => {
+            let (entries, verify_paths) = if let Some(path) = input_json.as_ref() {
+                let raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+                let parsed: Vec<startup_audit::StartupAuditInput> =
+                    serde_json::from_str(&raw).map_err(|e| format!("invalid startup JSON: {e}"))?;
+                (parsed, false)
+            } else {
+                #[cfg(windows)]
+                let host_entries: Vec<startup_audit::StartupAuditInput> = {
+                    let now_secs = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    crate::startup::discover(&crate::apps::Usage::collect())
+                        .into_iter()
+                        .map(|item| {
+                            let stale = item.usage_known
+                                && (item.last_used == 0
+                                    || now_secs.saturating_sub(item.last_used) >= 30 * 86_400);
+                            startup_audit::StartupAuditInput {
+                                name: item.name,
+                                command: item.command,
+                                enabled: item.enabled,
+                                broken: item.broken,
+                                system: item.system,
+                                stale,
+                            }
+                        })
+                        .collect()
+                };
+                #[cfg(not(windows))]
+                let host_entries: Vec<startup_audit::StartupAuditInput> = Vec::new();
+                (host_entries, cfg!(windows))
+            };
+            let report = startup_audit::audit_entries(&entries, verify_paths);
+            let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::ScanExtensions {
+            roots,
+            min_bytes,
+            limit,
+            out,
+        } => {
+            let effective_roots = if roots.is_empty() {
+                dirs::home_dir().map(|h| vec![h]).unwrap_or_default()
+            } else {
+                roots
+            };
+            let scan = big_files::scan(
+                &effective_roots,
+                &[],
+                min_bytes,
+                &AtomicBool::new(false),
+                |_| {},
+                |_| {},
+            );
+            let buckets = big_files::summarize_extensions(&scan.files, limit);
+            let payload = serde_json::json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "min_bytes": min_bytes,
+                "matched_files": scan.files.len(),
+                "scanned_files": scan.scanned_files,
+                "scanned_bytes": scan.scanned_bytes,
+                "extensions": buckets,
+            });
+            let json = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             Ok(0)
         }
@@ -1071,6 +1181,57 @@ mod tests {
         assert!(results.iter().any(|r| r["ruleId"] == "SLC005"));
         assert!(results.iter().any(|r| r["ruleId"] == "SLC006"));
         assert!(results.iter().any(|r| r["ruleId"] == "SLC008"));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn audit_startup_and_scan_extensions_cli_work_cross_platform() {
+        let root = std::env::temp_dir().join(format!("slclean-cli-v021-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+
+        std::fs::write(root.join("model.gguf"), vec![1u8; 8192]).unwrap();
+        std::fs::write(root.join("archive.iso"), vec![2u8; 4096]).unwrap();
+
+        let ext_out = root.join("ext.json");
+        let parsed_ext = parse_args(&vec_str(&[
+            "--scan-extensions",
+            "--project-root",
+            root.to_str().unwrap(),
+            "--min-mb",
+            "0",
+            "--out",
+            ext_out.to_str().unwrap(),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(execute_command(parsed_ext).unwrap(), 0);
+        let ext_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&ext_out).unwrap()).unwrap();
+        assert_eq!(ext_val["extensions"][0]["ext"].as_str(), Some("gguf"));
+
+        let startup_in = root.join("startup.json");
+        std::fs::write(
+            &startup_in,
+            r#"[{"name":"Docker Desktop","command":"Docker Desktop.exe","enabled":true,"stale":true},{"name":"SecurityHealth","command":"SecurityHealthSystray.exe","enabled":true,"system":true}]"#,
+        )
+        .unwrap();
+        let startup_out = root.join("startup-report.json");
+        let parsed_st = parse_args(&vec_str(&[
+            "--audit-startup",
+            "--startup-file",
+            startup_in.to_str().unwrap(),
+            "--out",
+            startup_out.to_str().unwrap(),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(execute_command(parsed_st).unwrap(), 0);
+        let st_val: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&startup_out).unwrap()).unwrap();
+        assert_eq!(st_val["total_entries"].as_u64(), Some(2));
+        assert_eq!(st_val["high_impact_count"].as_u64(), Some(1));
 
         let _ = std::fs::remove_dir_all(&root);
     }

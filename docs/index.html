@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SLClean v0.20.0 - Windows AI &amp; Developer Cache Explorer, 15-Tool Read-Only MCP Server, CLI HTML Digest &amp; Safe Cleanup Planner</title>
-  <meta name="description" content="Interactive rule explorer, 15-tool read-only stdio MCP server (SLClean --mcp), Safe Cleanup Roadmap Planner, CLI Executive HTML Storage Digest (SLClean --doctor --report-html), Settings &amp; Exclusion Validator, Large Files Extension Breakdown Analytics, Startup Boot-Impact Auditor, Disk Health Doctor (A-F), Orphan Env Scanner, Scan History Diff, Squarified Disk Treemap, AI cache &amp; duplicate weight dedup calculator, project-centric .git staleness reclaimer (SLC009), hygiene scanner (SLC010), Clean Run Ledger CSV export, and CI disk-budget calculator for SLClean v0.20.0." />
+  <title>SLClean v0.21.0 - Windows AI &amp; Developer Cache Explorer, 15-Tool Read-Only MCP Server, Startup &amp; Extension CLI Auditors</title>
+  <meta name="description" content="Interactive rule explorer, Startup Boot-Impact Simulator, 15-tool read-only stdio MCP server (SLClean --mcp), CLI --audit-startup &amp; --scan-extensions, Safe Cleanup Roadmap Planner, CLI Executive HTML Storage Digest (SLClean --doctor --report-html), Settings &amp; Exclusion Validator, Large Files Extension Breakdown Analytics, Disk Health Doctor (A-F), Orphan Env Scanner, Squarified Disk Treemap, and CI disk-budget calculator for SLClean v0.21.0." />
   <style>
     :root {
       --bg: #0f1411;
@@ -475,8 +475,13 @@
     </section>
 
     <section class="cli-box">
-      <h2>5. Built-In 15-Tool Read-Only MCP Server (<code>SLClean --mcp</code>), Safe Cleanup Planner &amp; CLI HTML Digest (v0.20.0)</h2>
-      <p class="sub">Connect Claude Code, Cursor, Windsurf, or Codex directly to SLClean's strictly read-only 15-tool MCP server (<code>slclean_plan_safe_cleanup</code>, <code>slclean_inspect_settings</code>, <code>slclean_export_digest_html</code>, <code>slclean_extension_breakdown</code>, <code>slclean_audit_startup_entries</code>, <code>slclean_doctor</code>, <code>slclean_scan_envs</code>, <code>slclean_history_diff</code>, <code>slclean_list_drives</code>, <code>slclean_scan_projects</code>, <code>slclean_scan_hygiene</code>, <code>slclean_scan_dupes</code>, <code>slclean_scan_big_files</code>, <code>slclean_ledger_summary</code>, <code>slclean_list_rules</code>) — zero automatic deletion guaranteed.</p>
+      <h2>5. Interactive Startup Boot-Impact Simulator &amp; 15-Tool Read-Only MCP Server (v0.21.0)</h2>
+      <p class="sub">Toggle heavy Windows startup launchers below to preview boot-time savings and A-F boot health grade (`SLClean --audit-startup`), or connect Claude Code / Cursor / Codex to SLClean's strictly read-only 15-tool MCP server (`SLClean --mcp`).</p>
+      <div class="chips" id="boot-sim-chips"></div>
+      <div class="budget-slider-row" style="margin-bottom:14px">
+        <span id="boot-sim-summary" style="font-family:var(--mono);font-size:13px"></span>
+        <span id="boot-sim-badge" class="badge b-pass">Grade A</span>
+      </div>
       <div class="budget-slider-row">
         <label for="doc-free-slider">System Drive (C:) Free %: <strong id="doc-free-val">18%</strong></label>
         <input type="range" id="doc-free-slider" min="2" max="60" value="18" />
@@ -488,14 +493,17 @@
         <button type="button" class="btn btn-primary" id="mcp-copy-btn">Copy MCP Config</button>
         <span id="mcp-copy-msg" style="font-size:13px;color:var(--muted)"></span>
       </div>
-      <pre style="margin-top:16px"># Scan project roots for broken Python venvs, manifest-less node_modules, and stale Cargo targets (SLC006-SLC009)
+      <pre style="margin-top:16px"># Audit Windows startup login latency &amp; broken entries (strictly read-only JSON)
+.\SLClean-portable.exe --audit-startup --out startup-audit.json
+
+# Summarize disk space by file extension (.gguf, .safetensors, .iso, .vhdx, .mp4...)
+.\SLClean-portable.exe --scan-extensions --project-root C:\Users\You --min-mb 10 --out ext-breakdown.json
+
+# Generate single-file executive HTML storage digest
+.\SLClean-portable.exe --doctor --report-html storage-digest.html
+
+# Scan project roots for broken Python venvs, manifest-less node_modules, and stale Cargo targets (SLC006-SLC009)
 .\SLClean-portable.exe --scan-projects --stale-days 30 --report-html audit.html --report-csv audit.csv
-
-# Scan empty folders &amp; broken symlinks (SLC010)
-.\SLClean-portable.exe --scan-hygiene --out hygiene.json
-
-# Audit duplicate Hugging Face / Ollama / build artifact blobs with zero-read CAS fastpath (SLC004)
-.\SLClean-portable.exe --scan-dupes --trust-cas-names --out ai-dupes.json
 
 # Export OASIS SARIF v2.1.0 report and fail CI runner (exit code 3) if reclaimable disk bloat exceeds 15 GB
 .\SLClean-portable.exe --scan-json --include-artifacts --max-reclaimable-gb 15 --sarif slclean.sarif</pre>
@@ -828,6 +836,45 @@
       docFree.addEventListener("input", paintDoc);
       paintDoc();
     }
+    const BOOT_ITEMS = [
+      { name: "Docker Desktop", ms: 3400, kind: "high", on: true },
+      { name: "Microsoft Teams", ms: 2600, kind: "high", on: true },
+      { name: "Discord", ms: 2200, kind: "high", on: true },
+      { name: "Adobe Creative Cloud", ms: 2400, kind: "high", on: false },
+      { name: "Steam Client", ms: 1900, kind: "high", on: false },
+      { name: "Edge / Chrome Updater", ms: 450, kind: "updater", on: true },
+      { name: "Windows SecurityHealth (Protected)", ms: 0, kind: "system", on: true }
+    ];
+    const bootChips = document.getElementById("boot-sim-chips");
+    const bootSummary = document.getElementById("boot-sim-summary");
+    const bootBadge = document.getElementById("boot-sim-badge");
+    function renderBootSim() {
+      if (!bootChips || !bootSummary || !bootBadge) return;
+      bootChips.innerHTML = "";
+      let totalMs = 0, highCount = 0, updCount = 0;
+      for (const it of BOOT_ITEMS) {
+        if (it.on) {
+          totalMs += it.ms;
+          if (it.kind === "high") highCount++;
+          if (it.kind === "updater") updCount++;
+        }
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip" + (it.on ? (it.kind === "high" ? " active-ai" : " active") : "");
+        b.textContent = `${it.name} (${it.kind === "system" ? "Locked" : "+" + (it.ms / 1000).toFixed(1) + "s"})`;
+        if (it.kind !== "system") {
+          b.onclick = () => { it.on = !it.on; renderBootSim(); };
+        }
+        bootChips.appendChild(b);
+      }
+      const penalty = highCount * 14 + updCount * 4 + Math.floor(totalMs / 1500);
+      const score = Math.max(0, 100 - penalty);
+      const grade = score >= 90 ? "A" : score >= 78 ? "B" : score >= 62 ? "C" : score >= 45 ? "D" : "F";
+      bootSummary.textContent = `Est. login overhead: +${(totalMs / 1000).toFixed(1)}s (${highCount} heavy, ${updCount} updater)`;
+      bootBadge.className = "badge " + (score >= 78 ? "b-pass" : score >= 62 ? "b-review" : "b-fail");
+      bootBadge.textContent = `Boot Grade ${grade} (${score}/100)`;
+    }
+    renderBootSim();
     renderEstimator();
     renderAiCalculator();
     renderEnvReclaimer();
