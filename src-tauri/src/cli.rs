@@ -70,6 +70,7 @@ pub enum CliCommand {
     },
     PlanCleanup {
         target_free_gb: f64,
+        report_html: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     Mcp,
@@ -379,6 +380,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         Some("check-settings") => Ok(Some(CliCommand::CheckSettings { out })),
         Some("plan-cleanup") => Ok(Some(CliCommand::PlanCleanup {
             target_free_gb: max_reclaimable_gb.unwrap_or(20.0).max(1.0),
+            report_html,
             out,
         })),
         Some("scan-dupes") => Ok(Some(CliCommand::ScanDupes {
@@ -615,6 +617,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
         }
         CliCommand::PlanCleanup {
             target_free_gb,
+            report_html,
             out,
         } => {
             let doc = disk_health::run_default();
@@ -633,6 +636,24 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
                     {"phase": 4, "safety": "review", "command": "SLClean --doctor --report-html slclean-digest.html", "deletes_automatically": false}
                 ]
             });
+            if let Some(html_path) = report_html.as_ref() {
+                let html = format!(
+                    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean v{} Safe Cleanup Roadmap</title>\
+<style>body{{background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif;padding:28px}}\
+.wrap{{max-width:860px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:14px}}\
+code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;border-radius:4px;color:#4ade80}}</style></head>\
+<body><div class=\"wrap\"><div class=\"card\"><h1>SLClean Safe Cleanup Roadmap (Read-Only)</h1>\
+<p>Current Disk Grade: <b>{}</b> ({}/100) &middot; Lowest Free: <b>{:.1}%</b> &middot; Target Free: <b>{:.1} GiB</b></p></div>\
+<div class=\"card\"><ol>\
+<li><b>[SAFE]</b> <code>SLClean --clean-safe --dry-run</code></li>\
+<li><b>[REBUILDABLE]</b> <code>SLClean --scan-projects --stale-days 30 --report-html slclean-projects.html</code></li>\
+<li><b>[REVIEW]</b> <code>SLClean --scan-dupes --trust-cas-names --sarif slclean-dupes.sarif</code></li>\
+<li><b>[VERIFY]</b> <code>SLClean --doctor --report-html slclean-digest.html --sarif slclean-health.sarif</code></li>\
+</ol></div></div></body></html>",
+                    env!("CARGO_PKG_VERSION"), doc.grade, doc.score, doc.lowest_free_pct, target_free_gb
+                );
+                write_file_creating_dirs(html_path, &html)?;
+            }
             let json = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
             emit_output(&json, out.as_ref())?;
             Ok(0)
