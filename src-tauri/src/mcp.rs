@@ -307,6 +307,20 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_projects_badge",
+            "description": "Scan directories for stale .git project build targets and emit a shields.io Endpoint Badge JSON summarizing reclaimable GiB (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "default": 30 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -779,6 +793,37 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_projects_badge" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let stale_days = args.and_then(|a| a.get("stale_days")).and_then(|v| v.as_u64()).unwrap_or(projects::DEFAULT_STALE_PROJECT_DAYS);
+            let cancel = Arc::new(AtomicBool::new(false));
+            let plan = project_roots::ScanPlan { roots, excluded: Vec::new() };
+            let found = artifacts::find_artifacts(&plan, &cancel, |_| {});
+            let rep = projects::group_artifacts_by_project(&found, stale_days, None);
+            let stale_gb = rep.stale_reclaimable_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+            let color = if stale_gb >= 10.0 { "red" } else if stale_gb >= 2.0 { "yellow" } else { "brightgreen" };
+            tool_outcome(
+                id,
+                json!({
+                    "project_count": rep.project_count,
+                    "stale_reclaimable_bytes": rep.stale_reclaimable_bytes,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean stale builds",
+                        "message": format!("{:.2} GiB ({} projects)", stale_gb, rep.project_count),
+                        "color": color,
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -858,7 +903,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 21);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 22);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
