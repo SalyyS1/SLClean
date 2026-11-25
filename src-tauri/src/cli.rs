@@ -100,6 +100,7 @@ pub enum CliCommand {
         to_trash: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
         badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
@@ -430,6 +431,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
                 to_trash,
                 max_reclaimable_gb,
                 sarif: sarif_out,
+                report_html,
                 badge_json,
                 out,
             }))
@@ -906,6 +908,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             to_trash,
             max_reclaimable_gb,
             sarif,
+            report_html,
             badge_json,
             out,
         } => {
@@ -945,6 +948,9 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 let sarif_json =
                     serde_json::to_string_pretty(&sarif_doc).map_err(|e| e.to_string())?;
                 write_file_creating_dirs(sarif_path, &sarif_json)?;
+            }
+            if let Some(html_path) = report_html.as_ref() {
+                write_file_creating_dirs(html_path, &env_reclaimer::render_envs_html(&scan))?;
             }
             if let Some(badge_path) = badge_json.as_ref() {
                 let gb = scan.total_reclaimable_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
@@ -1393,6 +1399,7 @@ mod tests {
 
         let json_out = root.join("out/envs.json");
         let sarif_out = root.join("out/envs.sarif");
+        let html_out = root.join("out/envs.html");
 
         let parsed = parse_args(&vec_str(&[
             "--scan-envs",
@@ -1404,6 +1411,8 @@ mod tests {
             "0",
             "--sarif",
             sarif_out.to_str().unwrap(),
+            "--report-html",
+            html_out.to_str().unwrap(),
             "--out",
             json_out.to_str().unwrap(),
         ]))
@@ -1412,6 +1421,10 @@ mod tests {
 
         let code = execute_command(parsed).unwrap();
         assert_eq!(code, EXIT_BUDGET_EXCEEDED);
+        let html_str = std::fs::read_to_string(&html_out).unwrap();
+        assert!(html_str.contains("Orphaned &amp; Stale Dev Environments Report"));
+        assert!(html_str.contains("SLC006"));
+        assert!(html_str.contains("SLC008"));
 
         let json_val: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&json_out).unwrap()).unwrap();

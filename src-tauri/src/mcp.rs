@@ -376,6 +376,20 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_envs_html",
+            "description": "Scan directories for orphaned/stale Python venvs, node_modules, Cargo targets & guarded WSL2 VHDX disks and render a self-contained dark-mode HTML Report (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "default": 30 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -985,6 +999,31 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_envs_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let stale_days = args.and_then(|a| a.get("stale_days")).and_then(|v| v.as_u64()).unwrap_or(30);
+            let scan = env_reclaimer::scan_environments(&roots, stale_days, &AtomicBool::new(false));
+            let html = env_reclaimer::render_envs_html(&scan);
+            tool_outcome(
+                id,
+                json!({
+                    "orphan_count": scan.orphan_count,
+                    "stale_count": scan.stale_count,
+                    "guarded_vhdx_count": scan.guarded_vhdx_count,
+                    "total_reclaimable_bytes": scan.total_reclaimable_bytes,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1064,7 +1103,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 26);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 27);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",

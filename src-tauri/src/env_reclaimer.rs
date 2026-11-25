@@ -728,6 +728,49 @@ pub fn reclaim_environments(
     }
 }
 
+fn escape_html(raw: &str) -> String {
+    raw.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Render a self-contained dark-mode HTML audit report of orphaned/stale dev environments and guarded VHDX disks.
+pub fn render_envs_html(report: &EnvScanReport) -> String {
+    let total_mb = report.total_reclaimable_bytes as f64 / (1024.0 * 1024.0);
+    let vhdx_mb = report.guarded_vhdx_bytes as f64 / (1024.0 * 1024.0);
+    let mut rows = String::new();
+    for c in report.candidates.iter().take(200) {
+        let mb = c.bytes as f64 / (1024.0 * 1024.0);
+        let badge_color = if !c.reclaim_safe { "#38bdf8" } else if c.status == "stale_inactive" { "#f59e0b" } else { "#f87171" };
+        rows.push_str(&format!(
+            "<tr><td><span style=\"color:{};font-weight:700\">{}</span></td><td>{}</td><td>{}</td><td>{:.1} MiB</td><td>{:.0}d</td><td><code>{}</code></td><td>{}</td></tr>\n",
+            badge_color,
+            escape_html(c.sarif_rule),
+            escape_html(c.category),
+            escape_html(c.status),
+            mb,
+            c.age_days,
+            escape_html(&c.path.display().to_string()),
+            escape_html(&c.remediation),
+        ));
+    }
+    if rows.is_empty() {
+        rows.push_str("<tr><td colspan=\"7\">No orphaned or stale development environments detected.</td></tr>");
+    }
+    format!(
+        r##"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean v{} Orphaned &amp; Stale Environments Report</title><style>body{{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:1120px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}}table{{width:100%;border-collapse:collapse;font-size:12.5px}}th,td{{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}}th{{color:#93a89b}}code{{font-family:ui-monospace,monospace;color:#4ade80}}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Orphaned &amp; Stale Dev Environments Report</h1><p>Orphans: <b>{}</b> &middot; Stale: <b>{}</b> &middot; Reclaimable: <b>{:.1} MiB</b> &middot; Guarded VHDX: <b>{} ({:.1} MiB, protected)</b> &middot; Stale Threshold: <b>{} days</b></p></div><div class="card"><table><thead><tr><th>Rule</th><th>Category</th><th>Status</th><th>Size</th><th>Age</th><th>Path</th><th>Remediation</th></tr></thead><tbody>{}</tbody></table></div></div></body></html>"##,
+        env!("CARGO_PKG_VERSION"),
+        report.orphan_count,
+        report.stale_count,
+        total_mb,
+        report.guarded_vhdx_count,
+        vhdx_mb,
+        report.stale_days_threshold,
+        rows
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

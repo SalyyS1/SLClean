@@ -321,6 +321,23 @@ async function removeAllDead() {
 }
 
 $("#btn-apps-scan").addEventListener("click", scanApps);
+if ($("#btn-apps-export-html")) {
+  $("#btn-apps-export-html").addEventListener("click", () => {
+    const rows = [...apps.values()].filter((a) => !a.gone).sort(appCompare);
+    const totalBytes = rows.reduce((s, a) => s + (a.folder_exists ? Number(a.bytes || 0) : 0), 0);
+    const deadCount = rows.filter((a) => a.dead).length;
+    const neverCount = rows.filter((a) => isUninstallCandidate(a) && a.usage_known && a.last_used === 0 && !a.running).length;
+    const tr = rows.slice(0, 300).map((a) => {
+      const status = a.dead ? "DEAD REGISTRY" : a.system_component ? "SYSTEM" : a.running ? "RUNNING" : (a.usage_known && a.last_used === 0 ? "NEVER USED" : "INSTALLED");
+      return `<tr><td><b>${esc(a.name)}</b><br><small>${esc(a.publisher || "")} ${esc(a.version || "")}</small></td><td>${esc(status)}</td><td>${esc(a.kind === "store" ? "Store" : "Desktop")}</td><td>${esc(a.folder_exists ? fmtBytes(a.bytes || 0) : "—")}</td><td><code>${esc(a.install_dir || "—")}</code></td></tr>`;
+    }).join("\n");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean Installed Apps Audit Report</title><style>body{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}.wrap{max-width:1100px;margin:0 auto}.card{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}th{color:#93a89b}code{font-family:ui-monospace,monospace;color:#4ade80}small{color:#93a89b}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Installed &amp; Unused Apps Audit</h1><p>Total Apps: <b>${rows.length}</b> &middot; Measured Footprint: <b>${esc(fmtBytes(totalBytes))}</b> &middot; Never Used: <b>${neverCount}</b> &middot; Dead Entries: <b>${deadCount}</b></p></div><div class="card"><table><thead><tr><th>Application</th><th>Status</th><th>Kind</th><th>Size</th><th>Install Path</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-apps-report.html", "text/html;charset=utf-8", html);
+      toast(lang === "vi" ? "Đã xuất slclean-apps-report.html" : "Exported slclean-apps-report.html");
+    }
+  });
+}
 $("#btn-remove-dead").addEventListener("click", removeAllDead);
 for (const b of document.querySelectorAll("[data-apps-sort]")) {
   b.addEventListener("click", () => { appsSort = b.dataset.appsSort; localStorage.setItem("slclean-apps-sort", appsSort); renderApps(); });
