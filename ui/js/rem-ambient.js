@@ -263,6 +263,9 @@
       applyFx(FX_MODES[(FX_MODES.indexOf(currentFx) + 1) % FX_MODES.length]);
     });
     document.getElementById("btn-cmd-open")?.addEventListener("click", openPalette);
+    document.getElementById("btn-cmd-close")?.addEventListener("click", () => {
+      document.getElementById("cmd-palette")?.close();
+    });
 
     // 1-Click All-in-One Smart Scan (Clean Caches + AI/Codex Documents Junk)
     document.getElementById("btn-smart-all")?.addEventListener("click", () => {
