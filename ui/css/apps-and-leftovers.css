@@ -1,19 +1,22 @@
 /* Tab Ứng dụng: mỗi app một hàng có "avatar" chữ cái, tên + hãng, lần mở cuối, ngày cài, dung
    lượng và nút hành động. Tab Thư mục thừa dùng lại hàng của sổ cái (.row) với vài nhãn thêm. */
-.apps { list-style: none; margin: 0; padding: 0; }
+.apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
 
 .app {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto auto;
   align-items: center;
   column-gap: 14px;
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--line-soft);
-  transition: background-color 120ms;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--moss-2);
+  backdrop-filter: blur(10px);
+  transition: background-color 140ms, border-color 140ms;
   animation: row-in var(--dur) var(--ease) both;
 }
-.app:hover { background: var(--moss-2); }
-.app--dead { background: rgba(217, 90, 67, 0.04); }
+.app:hover { background: var(--moss-3); border-color: var(--line); }
+.app--dead { background: var(--ember-tint); border-color: rgba(251, 113, 133, 0.32); }
 .app--gone { opacity: 0.35; text-decoration: line-through; pointer-events: none; }
 
 /* Chữ cái đầu trên nền màu suy từ tên: đủ để mắt phân biệt các hàng mà không cần icon thật. */

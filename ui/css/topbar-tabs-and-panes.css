@@ -1,13 +1,11 @@
-/* Thanh tab trên cùng của vùng chính và các pane: mỗi tab là một pane có đầu bảng, thanh lọc và
-   danh sách cuộn riêng; chỉ pane đang chọn hiển thị. Thanh trái (rail) dùng chung cho mọi tab. */
+/* Floating Frosted-Glass Top Navigation Bar */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 28px 0;
-  background: var(--moss);
-  /* Thanh tab bảy mục rộng hơn cửa sổ hẹp; không có min-width: 0 thì nav đẩy cả bố cục ra
-     ngoài khung và mép phải bị cắt, thay vì để thanh tab tự cuộn bên trong. */
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 26px 4px;
+  background: transparent;
   min-width: 0;
 }
 
@@ -15,41 +13,45 @@
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--moss-2);
+  backdrop-filter: blur(14px);
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
+  box-shadow: var(--shadow-soft);
 }
 .tabs::-webkit-scrollbar { display: none; }
 
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   padding: 7px 14px 7px 12px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--dust);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  /* Với bảy tab, cửa sổ hẹp làm flex co từng tab lại cho tới khi nhãn xuống hai dòng. Thà để
-     thanh tab cuộn ngang còn hơn để chữ gãy dòng. */
   flex: 0 0 auto;
   white-space: nowrap;
-  transition: color 140ms, background-color 140ms;
+  transition: color 150ms, background-color 150ms, box-shadow 150ms;
 }
-.tab svg { width: 14px; height: 14px; opacity: 0.8; flex: 0 0 auto; }
-/* Cửa sổ hẹp: bỏ icon cho bảy tab vẫn đọc được tên đầy đủ, hơn là để chữ bị cắt hay phải cuộn.
-   Icon chỉ là trang trí — mỗi tab đã có nhãn chữ rồi. */
+.tab svg { width: 14px; height: 14px; opacity: 0.85; flex: 0 0 auto; }
 @media (max-width: 1340px) {
   .tab svg { display: none; }
   .tab { padding: 7px 12px; gap: 6px; }
 }
-.tab:hover { color: var(--bone); background: var(--moss-3); }
-.tab.is-active { color: var(--moss); background: var(--amber); font-weight: 600; }
+.tab:hover { color: var(--bone); background: var(--amber-tint); }
+.tab.is-active {
+  color: #06131e;
+  background: linear-gradient(135deg, var(--amber), #7ce4fc);
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(95, 212, 244, 0.30);
+}
+:root[data-theme="glacier-mist"] .tab.is-active { color: #ffffff; }
 .tab.is-active svg { opacity: 1; }
 .tab:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
@@ -57,17 +59,42 @@
   min-width: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--moss);
+  background: var(--moss-3);
   color: var(--bone-dim);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   line-height: 18px;
   text-align: center;
 }
-.tab.is-active .tab__badge { background: rgba(16, 21, 18, 0.25); color: var(--moss); }
-.tab__badge--warn { background: var(--ember-tint); color: var(--ember); }
-.tab:not(.is-active) .tab__badge--warn { background: var(--ember-tint); color: var(--ember); }
+.tab.is-active .tab__badge { background: rgba(6, 19, 30, 0.22); color: inherit; }
+.tab__badge--warn,
+.tab:not(.is-active) .tab__badge--warn { background: var(--rem-pink-tint); color: var(--rem-pink); }
+
+.topbar__cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--moss-2);
+  backdrop-filter: blur(10px);
+  color: var(--dust);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.topbar__cmd:hover { border-color: var(--amber); color: var(--bone); background: var(--amber-tint); }
+.topbar__cmd kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--moss-3);
+  color: var(--amber);
+}
 
 .pane {
   display: grid;

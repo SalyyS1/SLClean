@@ -141,10 +141,12 @@ async function scanAiJunk() {
   try {
     const rep = await invoke("scan_ai_junk", { roots: [], staleDays: 7 });
     for (const [k, it] of items) {
-      if (it.group === "leftover" && (it.area === "ai_junk" || it.area === "installers")) items.delete(k);
+      if (it.group === "leftover" && (it.area === "ai_junk" || it.area === "installers" || it.area === "documents_junk")) items.delete(k);
     }
     for (const f of (rep && rep.findings) || []) {
-      const area = f.category === "leftover_installer" ? "installers" : "ai_junk";
+      const area =
+        f.category === "leftover_installer" ? "installers" :
+        f.category === "documents_junk" ? "documents_junk" : "ai_junk";
       const extraTags = [areaTag(area), verdictTag(f.verdict, f.confidence)];
       if (f.git_dirty) {
         extraTags.push(`<b class="tag tag--exe" title="Uncommitted git changes detected">git dirty</b>`);

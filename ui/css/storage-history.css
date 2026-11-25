@@ -104,7 +104,7 @@
 .treemap__tile {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid var(--moss-1, #101512);
+  border: 1px solid var(--moss-1, #09131e);
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
@@ -117,12 +117,12 @@
 .treemap__tile--into { cursor: pointer; }
 .treemap__tile--into:hover { filter: brightness(1.16); z-index: 2; }
 .treemap__tile--into:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; z-index: 3; }
-.treemap__tile--t0 { background: rgba(74, 222, 128, 0.22); }
-.treemap__tile--t1 { background: rgba(245, 158, 11, 0.24); }
-.treemap__tile--t2 { background: rgba(56, 189, 248, 0.22); }
-.treemap__tile--t3 { background: rgba(248, 113, 113, 0.22); }
-.treemap__tile--t4 { background: rgba(167, 139, 250, 0.22); }
-.treemap__tile--t5 { background: rgba(45, 212, 191, 0.20); }
+.treemap__tile--t0 { background: rgba(95, 212, 244, 0.24); }
+.treemap__tile--t1 { background: rgba(244, 143, 177, 0.22); }
+.treemap__tile--t2 { background: rgba(94, 234, 212, 0.22); }
+.treemap__tile--t3 { background: rgba(129, 140, 248, 0.24); }
+.treemap__tile--t4 { background: rgba(252, 211, 77, 0.20); }
+.treemap__tile--t5 { background: rgba(56, 189, 248, 0.22); }
 .treemap__name {
   font-weight: 600;
   font-size: 13px;
@@ -233,12 +233,13 @@ body.is-simple .row__path { display: none; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
-  padding: 0 22px 12px;
+  padding: 6px 26px 10px;
 }
 .overview-pill {
   background: var(--moss-2);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
+  border-radius: 10px;
   padding: 8px 12px;
   display: flex;
   justify-content: space-between;
@@ -248,6 +249,6 @@ body.is-simple .row__path { display: none; }
 .overview-pill__k { font-size: 11.5px; color: var(--dust); }
 .overview-pill__v { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--bone); }
 .overview-pill--safe .overview-pill__v { color: var(--sage); }
-.overview-pill--rebuild .overview-pill__v { color: #7dd3fc; }
-.overview-pill--review .overview-pill__v { color: var(--amber); }
-.tag--hygiene { background: rgba(167, 139, 250, 0.18); color: #c4b5fd; }
+.overview-pill--rebuild .overview-pill__v { color: var(--amber); }
+.overview-pill--review .overview-pill__v { color: var(--warn); }
+.tag--hygiene { background: var(--rem-pink-tint); color: var(--rem-pink); }

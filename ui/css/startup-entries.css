@@ -5,12 +5,15 @@
   grid-template-columns: 1fr auto auto;
   align-items: center;
   column-gap: 16px;
-  padding: 10px;
-  border-bottom: 1px solid var(--line-soft);
-  transition: background-color 120ms;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--moss-2);
+  backdrop-filter: blur(10px);
+  transition: background-color 140ms, border-color 140ms;
   animation: row-in var(--dur) var(--ease) both;
 }
-.boot:hover { background: var(--moss-2); }
+.boot:hover { background: var(--moss-3); border-color: var(--line); }
 /* Mục đã tắt vẫn hiện đủ thông tin, chỉ nhạt đi để mắt lướt qua nhóm đang bật trước. */
 .boot--off .boot__main { opacity: 0.55; }
 

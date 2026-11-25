@@ -1,30 +1,101 @@
-/* Tông "rêu đêm": nền xanh-đen, chữ màu xương, điểm nhấn hổ phách cho dung lượng lấy lại được,
-   đỏ than cho hành động xoá hẳn. Số liệu luôn dùng mono để cột cỡ file thẳng hàng. */
-:root {
-  --moss: #101512;
-  --moss-2: #151b17;
-  --moss-3: #1b231e;
-  --line: #27322b;
-  --line-soft: #1f2823;
-  --bone: #ece6d5;
-  --bone-dim: #c9c3b3;
-  --dust: #8b968d;
-  --dust-dim: #5f6a62;
-  --amber: #e2a83b;
-  --amber-deep: #b7821d;
-  --amber-tint: rgba(226, 168, 59, 0.12);
-  --ember: #d95a43;
-  --ember-tint: rgba(217, 90, 67, 0.14);
-  --sage: #8fb996;
-  --sage-tint: rgba(143, 185, 150, 0.12);
+/* Rem Aqua Signature Design System (Re:Zero Rem inspired — soothing sky-aqua, twilight navy,
+   delicate hairband rose-pink highlight & frosted glass surfaces). Eye-friendly & versatile. */
+:root,
+:root[data-theme="rem-aqua"] {
+  --moss: #09131e;
+  --moss-1: #09131e;
+  --moss-2: rgba(14, 27, 42, 0.80);
+  --moss-2-solid: #0f1e2e;
+  --moss-3: rgba(23, 42, 63, 0.85);
+  --glass-rail: linear-gradient(180deg, rgba(12, 24, 38, 0.90), rgba(8, 17, 28, 0.94));
+  --line: rgba(114, 211, 244, 0.20);
+  --line-soft: rgba(114, 211, 244, 0.10);
+
+  --bone: #ebf7fc;
+  --bone-dim: #bfd9e8;
+  --dust: #84a8be;
+  --dust-dim: #5c7d94;
+
+  /* Rem Aqua Primary Accent (replaces legacy amber across highlights, totals & active tabs) */
+  --amber: #5fd4f4;
+  --amber-deep: #2ea6cf;
+  --amber-tint: rgba(95, 212, 244, 0.14);
+
+  /* Rem Ribbon Rose-Pink Secondary Flair */
+  --rem-pink: #f48fb1;
+  --rem-pink-tint: rgba(244, 143, 177, 0.16);
+
+  /* Gentle Semantic Accents */
+  --sage: #5eead4;
+  --sage-tint: rgba(94, 234, 212, 0.14);
+  --warn: #fcd34d;
+  --warn-tint: rgba(252, 211, 77, 0.14);
+  --ember: #fb7185;
+  --ember-tint: rgba(251, 113, 133, 0.15);
 
   --font-display: "Bricolage Grotesque", "Be Vietnam Pro", "Segoe UI", sans-serif;
   --font-body: "Be Vietnam Pro", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
 
-  --rail-w: 300px;
-  --radius: 6px;
-  --radius-lg: 10px;
-  --dur: 420ms;
+  --rail-w: 312px;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --dur: 340ms;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-soft: 0 12px 32px rgba(3, 10, 20, 0.38);
+}
+
+/* Alternate Theme 2: Rem Twilight (Deep Soft Indigo + Ice Cyan + Sakura Lavender) */
+:root[data-theme="rem-twilight"] {
+  --moss: #0b0f1e;
+  --moss-1: #0b0f1e;
+  --moss-2: rgba(19, 24, 46, 0.80);
+  --moss-2-solid: #141a33;
+  --moss-3: rgba(30, 38, 69, 0.86);
+  --glass-rail: linear-gradient(180deg, rgba(16, 20, 40, 0.92), rgba(10, 14, 28, 0.95));
+  --line: rgba(125, 211, 252, 0.22);
+  --line-soft: rgba(125, 211, 252, 0.11);
+  --bone: #eef4ff;
+  --bone-dim: #c3d0ec;
+  --dust: #8c9ec4;
+  --dust-dim: #627297;
+  --amber: #67e8f9;
+  --amber-deep: #22b8cf;
+  --amber-tint: rgba(103, 232, 249, 0.14);
+  --rem-pink: #f0abfc;
+  --rem-pink-tint: rgba(240, 171, 252, 0.16);
+  --sage: #6ee7b7;
+  --sage-tint: rgba(110, 231, 183, 0.14);
+  --warn: #fde68a;
+  --warn-tint: rgba(253, 230, 138, 0.15);
+  --ember: #fb7185;
+  --ember-tint: rgba(251, 113, 133, 0.16);
+}
+
+/* Alternate Theme 3: Glacier Mist (Soothing Daylight Porcelain-Aqua) */
+:root[data-theme="glacier-mist"] {
+  --moss: #edf6fb;
+  --moss-1: #edf6fb;
+  --moss-2: rgba(255, 255, 255, 0.86);
+  --moss-2-solid: #ffffff;
+  --moss-3: rgba(224, 242, 252, 0.90);
+  --glass-rail: linear-gradient(180deg, rgba(242, 249, 253, 0.95), rgba(229, 243, 251, 0.96));
+  --line: rgba(14, 116, 144, 0.18);
+  --line-soft: rgba(14, 116, 144, 0.10);
+  --bone: #0f2537;
+  --bone-dim: #2b4a62;
+  --dust: #4c708a;
+  --dust-dim: #6f90a8;
+  --amber: #0284c7;
+  --amber-deep: #0369a1;
+  --amber-tint: rgba(2, 132, 199, 0.12);
+  --rem-pink: #db2777;
+  --rem-pink-tint: rgba(219, 39, 119, 0.12);
+  --sage: #0d9488;
+  --sage-tint: rgba(13, 148, 136, 0.13);
+  --warn: #b45309;
+  --warn-tint: rgba(217, 119, 6, 0.13);
+  --ember: #e11d48;
+  --ember-tint: rgba(225, 29, 72, 0.12);
+  --shadow-soft: 0 10px 28px rgba(15, 37, 55, 0.10);
 }

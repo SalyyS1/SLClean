@@ -30,7 +30,7 @@ pub struct AiJunkFinding {
     pub id: String,
     pub path: PathBuf,
     pub name: String,
-    /// "ai_agent_residue" | "ai_test_junk" | "ai_worktree" | "leftover_installer"
+    /// "ai_agent_residue" | "ai_test_junk" | "ai_worktree" | "documents_junk" | "leftover_installer"
     pub category: String,
     /// "safe_delete" | "review" | "keep"
     pub verdict: String,
@@ -40,7 +40,7 @@ pub struct AiJunkFinding {
     pub age_days: u64,
     pub modified: u64,
     pub git_dirty: bool,
-    /// "SLC016" (AI residue/worktree) | "SLC017" (ephemeral test/crash junk) | "SLC018" (leftover installer)
+    /// "SLC016" (AI residue/worktree) | "SLC017" (ephemeral test/crash junk) | "SLC018" (leftover installer) | "SLC019" (Codex/AI junk in Documents)
     pub rule_id: String,
     pub reason_vi: String,
     pub reason_en: String,
@@ -724,6 +724,241 @@ fn walk_test_junk(
     }
 }
 
+const DOCS_AI_DIR_PREFIXES: &[&str] = &[
+    "codex",
+    ".codex",
+    "claude-",
+    "claude_",
+    "ai-test",
+    "ai_test",
+    "agent-",
+    "openai-",
+    "tmp-",
+    "tmp_",
+    "temp-",
+    "test-",
+    "test_",
+    "scratch",
+    "sandbox",
+    "playground",
+    "demo-",
+    "repro-",
+    "bench-",
+    "mock-",
+    "smoke-",
+    "verify-",
+    "check-",
+    "mckit-",
+];
+
+const DOCS_PROTECTED_EXTS: &[&str] = &[
+    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "odt", "ods", "odp", "rtf",
+    "psd", "ai", "fig", "mp4", "mkv", "mov", "mp3", "wav", "flac", "zip", "rar", "7z",
+];
+
+const DOCS_JUNK_FILE_EXTS: &[&str] = &["log", "jsonl", "tmp", "bak", "dmp", "hprof", "trace", "har"];
+
+const DOCS_DEV_ARTIFACT_MARKERS: &[&str] = &[
+    "node_modules",
+    "target",
+    ".pytest_cache",
+    "playwright-report",
+    "test-results",
+    "__pycache__",
+    ".venv",
+    "htmlcov",
+    ".vitest",
+];
+
+/// Deeply inspects Windows/Unix `Documents` (and `OneDrive/Documents`) for Codex/AI throwaway
+/// test directories, stray dev build outputs, and loose test/debug dump files — while strictly
+/// protecting personal Office/PDF/media documents.
+fn scan_documents_codex_junk(
+    docs_dir: &Path,
+    stale_days: u64,
+    now: u64,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<AiJunkFinding>,
+) {
+    let Ok(entries) = std::fs::read_dir(docs_dir) else { return };
+    for entry in entries.flatten() {
+        if out.len() >= MAX_FINDINGS {
+            break;
+        }
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        let lower = name.to_ascii_lowercase();
+
+        if ft.is_file() {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
+            if DOCS_PROTECTED_EXTS.contains(&ext.as_str()) {
+                continue;
+            }
+            let is_junk_ext = DOCS_JUNK_FILE_EXTS.contains(&ext.as_str());
+            let is_codex_test_file = (lower.starts_with("codex")
+                || lower.starts_with("test_")
+                || lower.starts_with("test-")
+                || lower.starts_with("debug_")
+                || lower.starts_with("tmp_")
+                || lower.starts_with("trace_")
+                || lower.starts_with("output_"))
+                && matches!(ext.as_str(), "txt" | "json" | "jsonl" | "log" | "html" | "py" | "js" | "ts" | "ps1" | "bat" | "md");
+            if !is_junk_ext && !is_codex_test_file {
+                continue;
+            }
+            let (bytes, files) = measure_path(&path);
+            if bytes == 0 {
+                continue;
+            }
+            let modified = modified_epoch(&path);
+            let age_days = age_days_from(modified, now);
+            let (verdict, confidence) = if is_junk_ext || age_days >= stale_days {
+                ("safe_delete", 94u8)
+            } else {
+                ("review", 72u8)
+            };
+            push_unique(
+                out,
+                seen,
+                AiJunkFinding {
+                    id: format!("docsjunk:{}", path_key(&path)),
+                    path,
+                    name: format!("Documents/{name}"),
+                    category: "documents_junk".into(),
+                    verdict: verdict.into(),
+                    confidence,
+                    bytes,
+                    files,
+                    age_days,
+                    modified,
+                    git_dirty: false,
+                    rule_id: "SLC019".into(),
+                    reason_vi: format!(
+                        "File rác test/log của Codex hoặc AI nằm trong Documents ({age_days} ngày). Không phải tài liệu Office/PDF cá nhân — {}.",
+                        if verdict == "safe_delete" { "XÓA AN TOÀN 100%" } else { "XEM LẠI trước khi xóa" }
+                    ),
+                    reason_en: format!(
+                        "Stray Codex/AI test or log file inside Documents ({age_days}d old). Not a personal Office/PDF document — {}.",
+                        if verdict == "safe_delete" { "100% SAFE TO DELETE" } else { "REVIEW before deleting" }
+                    ),
+                    impact_vi: "Không ảnh hưởng tài liệu cá nhân hay mã nguồn dự án chính.".into(),
+                    impact_en: "Zero impact on personal documents or main project repositories.".into(),
+                },
+            );
+            continue;
+        }
+
+        if !ft.is_dir() {
+            continue;
+        }
+        // Skip standard Windows Documents subfolders (My Music, My Pictures, PowerShell, etc.)
+        if matches!(
+            lower.as_str(),
+            "my music" | "my pictures" | "my videos" | "windowspowershell" | "powershell" | "iisexpress" | "visual studio 2022" | "custom office templates"
+        ) {
+            continue;
+        }
+
+        let name_looks_codex_test = DOCS_AI_DIR_PREFIXES.iter().any(|p| lower.starts_with(p));
+        let found_markers: Vec<&str> = DOCS_DEV_ARTIFACT_MARKERS
+            .iter()
+            .copied()
+            .filter(|m| path.join(m).exists())
+            .collect();
+
+        if !name_looks_codex_test && found_markers.is_empty() {
+            continue;
+        }
+
+        let (bytes, files) = measure_path(&path);
+        if bytes == 0 && files == 0 {
+            continue;
+        }
+        let modified = modified_epoch(&path);
+        let age_days = age_days_from(modified, now);
+        let dirty = is_git_dirty(&path);
+        let marker_note = if found_markers.is_empty() {
+            String::new()
+        } else {
+            format!(" [chứa {}]", found_markers.join(", "))
+        };
+        let marker_note_en = if found_markers.is_empty() {
+            String::new()
+        } else {
+            format!(" [contains {}]", found_markers.join(", "))
+        };
+
+        let (verdict, confidence, reason_vi, reason_en, imp_vi, imp_en) = if dirty {
+            (
+                "keep",
+                94u8,
+                format!("Thư mục `{name}` trong Documents{marker_note} ĐANG CÓ CODE GIT CHƯA COMMIT — NÊN GIỮ / commit trước!"),
+                format!("Folder `{name}` in Documents{marker_note_en} HAS UNCOMMITTED GIT CHANGES — KEEP or commit first!"),
+                "Xóa ngay có thể làm mất thay đổi code chưa lưu.",
+                "Deleting now may lose uncommitted edits.",
+            )
+        } else if name_looks_codex_test && (age_days >= stale_days || !found_markers.is_empty()) {
+            (
+                "safe_delete",
+                95u8,
+                format!("Thư mục test/rác Codex `{name}` nằm lạc trong Documents{marker_note} ({files} file, bỏ trống {age_days} ngày) — XÓA AN TOÀN 100%!"),
+                format!("Stray Codex/AI test folder `{name}` in Documents{marker_note_en} ({files} files, idle {age_days}d) — 100% SAFE TO DELETE!"),
+                "Thư mục chạy thử của Codex/AI bị bỏ quên trong Documents; đưa vào Thùng rác giúp nhẹ ổ C ngay lập tức.",
+                "Abandoned AI/Codex scratch folder in Documents; recycling immediately reclaims disk space.",
+            )
+        } else if !found_markers.is_empty() && age_days >= stale_days {
+            (
+                "review",
+                80u8,
+                format!("Thư mục `{name}` trong Documents chứa artifact build/test nặng{marker_note} (bỏ trống {age_days} ngày) — XEM LẠI xem có phải dự án test cũ không."),
+                format!("Folder `{name}` in Documents holds heavy build/test artifacts{marker_note_en} (idle {age_days}d) — REVIEW if it is an old test project."),
+                "Mở nhanh Explorer kiểm tra; nếu là dự án thử nghiệm cũ thì xóa an toàn.",
+                "Quickly inspect in Explorer; safe to remove if it was a throwaway test repo.",
+            )
+        } else {
+            (
+                "review",
+                70u8,
+                format!("Thư mục `{name}` trong Documents có dấu hiệu test/Codex (mới chạm {age_days} ngày trước) — XEM LẠI trước khi xóa."),
+                format!("Folder `{name}` in Documents looks like a recent Codex/test workspace ({age_days}d ago) — REVIEW before removing."),
+                "Có thể phiên Codex gần đây vừa tạo ra.",
+                "May have been created by a recent Codex session.",
+            )
+        };
+
+        push_unique(
+            out,
+            seen,
+            AiJunkFinding {
+                id: format!("docsjunk:{}", path_key(&path)),
+                path,
+                name: format!("Documents/{name}"),
+                category: "documents_junk".into(),
+                verdict: verdict.into(),
+                confidence,
+                bytes,
+                files,
+                age_days,
+                modified,
+                git_dirty: dirty,
+                rule_id: "SLC019".into(),
+                reason_vi,
+                reason_en,
+                impact_vi: imp_vi.into(),
+                impact_en: imp_en.into(),
+            },
+        );
+    }
+}
+
 /// Scans `Downloads`, `Desktop`, and installer temp directories for forgotten setup packages.
 fn scan_installer_dir(
     dir: &Path,
@@ -812,6 +1047,13 @@ pub fn scan_with_options(
         if home.is_dir() {
             scanned_roots.push(home.to_path_buf());
             scan_ai_agent_home(home, stale_days, now, &mut seen, &mut findings);
+            for docs_rel in ["Documents", "OneDrive/Documents"] {
+                let d = home.join(docs_rel);
+                if d.is_dir() {
+                    scanned_roots.push(d.clone());
+                    scan_documents_codex_junk(&d, stale_days, now, &mut seen, &mut findings);
+                }
+            }
         }
     }
 
@@ -1028,7 +1270,8 @@ pub fn render_sarif(report: &AiJunkReport) -> serde_json::Value {
                     "rules": [
                         { "id": "SLC016", "name": "AiAgentResidueOrWorktree", "shortDescription": { "text": "Stale AI agent debug logs, tool dumps, or orphaned git worktrees" } },
                         { "id": "SLC017", "name": "EphemeralTestJunkOrCrashDump", "shortDescription": { "text": "Regenerable test runner caches, crash dumps, or abandoned scratch directories" } },
-                        { "id": "SLC018", "name": "LeftoverInstallerPackage", "shortDescription": { "text": "Forgotten setup installer files (.exe/.msi/.msix) left in Downloads or Temp" } }
+                        { "id": "SLC018", "name": "LeftoverInstallerPackage", "shortDescription": { "text": "Forgotten setup installer files (.exe/.msi/.msix) left in Downloads or Temp" } },
+                        { "id": "SLC019", "name": "DocumentsAiTestResidue", "shortDescription": { "text": "Stray Codex/AI test folders, build caches, or debug logs accumulated inside Documents" } }
                     ]
                 }
             },
@@ -1070,6 +1313,13 @@ mod tests {
         let _ = Command::new("git").args(["init", "-q"]).current_dir(&wt).status();
         std::fs::write(wt.join("uncommitted.txt"), "do not delete me").unwrap();
 
+        // 5. Stray Codex test directory & log inside Documents -> safe_delete (SLC019), personal .docx protected!
+        let docs = fake_home.join("Documents");
+        std::fs::create_dir_all(docs.join("codex-test-runner/node_modules")).unwrap();
+        std::fs::write(docs.join("codex-test-runner/node_modules/pkg.js"), vec![5u8; 4096]).unwrap();
+        std::fs::write(docs.join("codex_debug.log"), "codex trace output").unwrap();
+        std::fs::write(docs.join("MyImportantReport.docx"), "personal document").unwrap();
+
         // Use future `now` (+20 days) so fresh files appear 20 days old (stale_days=7)
         let future_now = now_epoch() + 20 * 86_400;
         let rep = scan_with_options(
@@ -1081,12 +1331,15 @@ mod tests {
             Some(future_now),
         );
 
-        assert!(rep.safe_delete_count >= 5, "expected >=5 safe_delete items, got {:?}", rep.findings);
+        assert!(rep.safe_delete_count >= 7, "expected >=7 safe_delete items, got {:?}", rep.findings);
         assert!(rep.findings.iter().any(|f| f.name == ".pytest_cache" && f.verdict == "safe_delete" && f.rule_id == "SLC017"));
         assert!(rep.findings.iter().any(|f| f.name == "playwright-report" && f.verdict == "safe_delete"));
         assert!(rep.findings.iter().any(|f| f.name == "hs_err_pid1234.log" && f.verdict == "safe_delete"));
         assert!(rep.findings.iter().any(|f| f.name == ".claude/debug" && f.verdict == "safe_delete" && f.rule_id == "SLC016"));
         assert!(rep.findings.iter().any(|f| f.name == "RandomTool-Setup-x64.exe" && f.verdict == "safe_delete" && f.rule_id == "SLC018"));
+        assert!(rep.findings.iter().any(|f| f.category == "documents_junk" && f.name == "Documents/codex-test-runner" && f.verdict == "safe_delete" && f.rule_id == "SLC019"));
+        assert!(rep.findings.iter().any(|f| f.category == "documents_junk" && f.name == "Documents/codex_debug.log" && f.verdict == "safe_delete"));
+        assert!(!rep.findings.iter().any(|f| f.name.contains("MyImportantReport.docx")), "personal Office documents must NEVER be flagged");
 
         let wt_item = rep.findings.iter().find(|f| f.category == "ai_worktree").expect("worktree finding");
         assert!(wt_item.git_dirty, "dirty worktree must be detected");
@@ -1099,7 +1352,7 @@ mod tests {
 
         let sarif = render_sarif(&rep);
         assert_eq!(sarif["version"], "2.1.0");
-        assert_eq!(sarif["runs"][0]["tool"]["driver"]["rules"].as_array().unwrap().len(), 3);
+        assert_eq!(sarif["runs"][0]["tool"]["driver"]["rules"].as_array().unwrap().len(), 4);
 
         let badge = render_badge_json(&rep);
         assert_eq!(badge["label"], "slclean ai-junk");

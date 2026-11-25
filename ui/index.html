@@ -19,16 +19,33 @@
   <link rel="stylesheet" href="css/settings-dialog.css">
 </head>
 <body>
+<canvas id="rem-ambient-canvas" aria-hidden="true"></canvas>
 
-<!-- Thanh trái: ổ đĩa, tổng đã chọn, nút dọn. Luôn hiển thị để người dùng thấy hậu quả của mỗi tick,
-     dù đang ở tab nào. -->
+<!-- Thanh trái: Rem Aqua frosted glass rail — ổ đĩa, tổng đã chọn, nút dọn & điều khiển giao diện -->
 <aside class="rail">
   <header class="rail__brand">
-    <img class="rail__mark" src="brand/app-icon-128.png" alt="" aria-hidden="true">
+    <div class="rail__crest" aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none">
+        <defs>
+          <linearGradient id="remG" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7ce4fc"/>
+            <stop offset="1" stop-color="#38bdf8"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 3L19.6 12.4L29 16L19.6 19.6L16 29L12.4 19.6L3 16L12.4 12.4L16 3Z" fill="url(#remG)" opacity="0.92"/>
+        <circle cx="24" cy="8.5" r="3.4" fill="#f48fb1"/>
+        <circle cx="16" cy="16" r="3" fill="#09131e"/>
+      </svg>
+    </div>
     <h1 class="rail__title">SLClean</h1>
     <button class="rail__lang" id="btn-lang" title="Tiếng Việt / English">EN</button>
-    <p class="rail__tag" data-i18n="app.tagline">Dọn cache &amp; artifact build trên máy này</p>
+    <p class="rail__tag" data-i18n="app.tagline">Dọn cache, rác AI/Codex &amp; tối ưu ổ đĩa</p>
   </header>
+
+  <div class="rail__pills">
+    <button type="button" class="rail__pill" id="btn-theme-cycle" title="Đổi màu giao diện (Rem Aqua / Rem Twilight / Glacier Light)">❄ Rem Aqua</button>
+    <button type="button" class="rail__pill rail__pill--pink" id="btn-fx-cycle" title="Bật/tắt hiệu ứng nền động anime (tự dừng khi ẩn cửa sổ)">✦ Nền động: Nhẹ</button>
+  </div>
 
   <section class="drives" aria-label="Drives">
     <ul class="drives__list" id="drives"></ul>
@@ -104,6 +121,9 @@
         <span data-i18n="tab.history">Nhật ký</span><b class="tab__badge" id="badge-history" hidden></b>
       </button>
     </div>
+    <button type="button" class="topbar__cmd" id="btn-cmd-open" title="Bảng lệnh nhanh (Ctrl+K)">
+      <span>Lệnh nhanh</span><kbd>Ctrl K</kbd>
+    </button>
   </nav>
 
   <!-- ===== Tab Dọn dẹp: cache + artifact ===== -->
@@ -124,6 +144,37 @@
         <button class="btn btn--ghost" id="btn-cancel" hidden data-i18n="board.stop">Dừng</button>
       </div>
     </header>
+
+    <div class="qa-strip" aria-label="Quick actions">
+      <button type="button" class="qa-card qa-card--pink" id="qa-codex-docs">
+        <span class="qa-card__ico">✦</span>
+        <span>
+          <span class="qa-card__title" data-i18n="qa.codexTitle">Rác AI &amp; Codex (Documents)</span>
+          <span class="qa-card__sub" data-i18n="qa.codexSub">Tìm thư mục test, log &amp; bộ cài thừa</span>
+        </span>
+      </button>
+      <button type="button" class="qa-card qa-card--mint" id="qa-uninstalled">
+        <span class="qa-card__ico">🧹</span>
+        <span>
+          <span class="qa-card__title" data-i18n="qa.leftTitle">App đã gỡ để sót</span>
+          <span class="qa-card__sub" data-i18n="qa.leftSub">Phân loại sẵn Xóa An Toàn / Xem Lại</span>
+        </span>
+      </button>
+      <button type="button" class="qa-card" id="qa-large-files">
+        <span class="qa-card__ico">🧊</span>
+        <span>
+          <span class="qa-card__title" data-i18n="qa.filesTitle">File lớn &amp; Bản đồ khối</span>
+          <span class="qa-card__sub" data-i18n="qa.filesSub">Soi nhanh file nặng nhất trên ổ đĩa</span>
+        </span>
+      </button>
+      <button type="button" class="qa-card" id="qa-startup-grade">
+        <span class="qa-card__ico">⚡</span>
+        <span>
+          <span class="qa-card__title" data-i18n="qa.bootTitle">Điểm khởi động (A–F)</span>
+          <span class="qa-card__sub" data-i18n="qa.bootSub">Tắt app tự chạy làm chậm Windows</span>
+        </span>
+      </button>
+    </div>
 
     <div class="overview-strip" id="overview-strip" aria-label="Safety summary"></div>
 
@@ -339,6 +390,7 @@
       <div class="quick" role="group">
         <button class="quick__btn" data-left-filter="all" data-i18n="filter.all">Tất cả</button>
         <button class="quick__btn" data-left-filter="safe_only" data-i18n="left.filterSafe">✓ Xóa an toàn</button>
+        <button class="quick__btn" data-left-filter="documents_junk" data-i18n="left.filterDocs">Documents / Codex</button>
         <button class="quick__btn" data-left-filter="ai_junk" data-i18n="left.filterAiJunk">Rác AI &amp; Test</button>
         <button class="quick__btn" data-left-filter="installers" data-i18n="left.filterInstallers">Bộ cài thừa</button>
         <button class="quick__btn" data-left-filter="appdata">AppData</button>
@@ -647,10 +699,20 @@
   </form>
 </dialog>
 
+<dialog class="cmd-dialog" id="cmd-palette">
+  <div class="cmd__head">
+    <span style="color:var(--amber)">✦</span>
+    <input type="search" id="cmd-input" placeholder="Gõ lệnh nhanh: quét rác Codex, xóa an toàn, đổi theme Rem Aqua..." autocomplete="off" spellcheck="false">
+    <button type="button" class="btn btn--ghost btn--sm" onclick="document.getElementById('cmd-palette').close()">ESC</button>
+  </div>
+  <ul class="cmd__list" id="cmd-list"></ul>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/i18n-strings.js"></script>
 <script src="js/format-bytes-and-dates.js"></script>
+<script src="js/rem-ambient.js" defer></script>
 <script src="js/ledger-view-and-rows.js" defer></script>
 <script src="js/settings-dialog.js" defer></script>
 <script src="js/tabs-and-ask-dialog.js" defer></script>

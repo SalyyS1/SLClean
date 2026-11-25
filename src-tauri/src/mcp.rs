@@ -1577,11 +1577,11 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rule_count": 18,
+                    "sarif_rule_count": 19,
                     "badge": {
                         "schemaVersion": 1,
                         "label": "slclean rules",
-                        "message": format!("{} specs · 18 SARIF rules", specs.len()),
+                        "message": format!("{} specs · 19 SARIF rules", specs.len()),
                         "color": "brightgreen",
                     }
                 }),
@@ -1640,7 +1640,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013","SLC014","SLC015","SLC016","SLC017","SLC018"],
+                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013","SLC014","SLC015","SLC016","SLC017","SLC018","SLC019"],
                     "specs": specs,
                 }),
                 false,
@@ -1928,7 +1928,7 @@ mod tests {
         assert_eq!(aij_html_resp["result"]["isError"], false);
         assert!(aij_html_resp["result"]["content"][0]["text"].as_str().unwrap().contains("<!doctype html>"));
         let rb_payload: Value = serde_json::from_str(rb_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
-        assert_eq!(rb_payload["sarif_rule_count"], 18);
+        assert_eq!(rb_payload["sarif_rule_count"], 19);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
