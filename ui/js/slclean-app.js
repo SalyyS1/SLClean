@@ -90,7 +90,36 @@ function updateRailHealthPill() {
   pill.hidden = false;
   pill.style.color = color;
   pill.style.borderColor = color;
-  pill.textContent = (lang === "vi" ? "Sức khỏe ổ đĩa: Hạng " : "Disk Health: Grade ") + grade + " (" + minFreePct.toFixed(1) + "% free)";
+  pill.title = lang === "vi"
+    ? "Bấm để xuất Báo cáo Sức khỏe Ổ đĩa (HTML)"
+    : "Click to export Workstation Drive Health Digest (HTML)";
+  pill.textContent = (lang === "vi" ? "Sức khỏe ổ đĩa: Hạng " : "Disk Health: Grade ") + grade + " (" + minFreePct.toFixed(1) + "% free) ↗";
+}
+
+function exportDriveHealthDigest() {
+  if (!drives.length) return;
+  let minFreePct = 100;
+  let totalBytes = 0, freeBytes = 0;
+  for (const d of drives) {
+    totalBytes += d.total || 0;
+    freeBytes += d.free || 0;
+    if (d.total > 0) {
+      const pct = (d.free / d.total) * 100;
+      if (pct < minFreePct) minFreePct = pct;
+    }
+  }
+  const grade = minFreePct >= 20 ? "A" : minFreePct >= 15 ? "B" : minFreePct >= 10 ? "C" : minFreePct >= 5 ? "D" : "F";
+  const reclaimable = [...items.values()].filter((i) => !i.gone && i.bytes > 0).reduce((s, i) => s + i.bytes, 0);
+  const rows = drives.map((d) => {
+    const used = Math.max(0, (d.total || 0) - (d.free || 0));
+    const usedPct = d.total > 0 ? (used / d.total) * 100 : 0;
+    const freePct = 100 - usedPct;
+    const status = freePct < 5 ? "CRITICAL" : freePct < 15 ? "WARNING" : "HEALTHY";
+    return `<tr><td><b>${esc(d.mount)}</b> ${esc(d.name || "")}</td><td style="text-align:right;font-family:monospace">${fmtBytes(d.free)}</td><td style="text-align:right;font-family:monospace">${fmtBytes(d.total)}</td><td style="text-align:right;font-family:monospace">${freePct.toFixed(1)}%</td><td>${status}</td></tr>`;
+  }).join("");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>SLClean Drive Health Digest</title><style>body{font-family:system-ui,sans-serif;background:#101512;color:#e6efe9;padding:24px;max-width:920px;margin:0 auto}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #2a3730;padding:8px 10px;text-align:left;font-size:13px}th{color:#93a89b;text-transform:uppercase;font-size:11px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}.card{background:#161d19;border:1px solid #2a3730;border-radius:8px;padding:12px}</style></head><body><h1>SLClean Workstation Drive Health Digest</h1><div class="cards"><div class="card"><div>Overall Grade</div><strong style="font-size:24px">Grade ${grade}</strong></div><div class="card"><div>Total Free Space</div><strong style="font-size:20px">${fmtBytes(freeBytes)} / ${fmtBytes(totalBytes)}</strong></div><div class="card"><div>Detected Reclaimable</div><strong style="font-size:20px">${fmtBytes(reclaimable)}</strong></div></div><table><thead><tr><th>Drive</th><th style="text-align:right">Free</th><th style="text-align:right">Total</th><th style="text-align:right">Free %</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  downloadBlob("slclean-drive-health-digest.html", "text/html;charset=utf-8", html);
+  toast(lang === "vi" ? "Đã xuất báo cáo sức khỏe ổ đĩa (HTML)" : "Exported Drive Health Digest (HTML)");
 }
 
 /** Vạch hổ phách trên thanh ổ đĩa = tổng các mục đã tick nằm trên ổ đó. */
@@ -427,6 +456,12 @@ for (const b of document.querySelectorAll("[data-view]")) {
 }
 if ($("#btn-export-html")) $("#btn-export-html").addEventListener("click", () => exportAuditReport("html"));
 if ($("#btn-export-csv")) $("#btn-export-csv").addEventListener("click", () => exportAuditReport("csv"));
+if ($("#rail-health-pill")) {
+  $("#rail-health-pill").addEventListener("click", exportDriveHealthDigest);
+  $("#rail-health-pill").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); exportDriveHealthDigest(); }
+  });
+}
 for (const b of document.querySelectorAll("[data-filter]")) {
   b.addEventListener("click", () => { filter = b.dataset.filter; localStorage.setItem("slclean-filter", filter); syncViewButtons(); renderAll(); });
 }

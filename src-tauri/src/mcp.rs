@@ -5,12 +5,13 @@
 //! agents (Claude Code, Cursor, Windsurf, Codex, Antigravity) can diagnose disk bloat,
 //! stale `.git` build artifacts, empty dirs / broken symlinks, and cleanup history.
 
-use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects, settings, startup_audit};
+use crate::{artifacts, big_files, blob_dupes, catalog_specs, dead_links, disk_health, drives, env_reclaimer, history, ledger, project_roots, projects, report_export, settings, startup_audit};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
@@ -410,6 +411,20 @@ fn tool_definitions() -> Value {
                 "properties": {
                     "roots": { "type": "array", "items": { "type": "string" } },
                     "min_mb": { "type": "number", "minimum": 0.001, "default": 50.0 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_projects_html",
+            "description": "Scan directories for rebuildable .git project build targets (target/, node_modules/, build/, .venv/) and render a self-contained dark-mode HTML Project Audit Report (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "default": 30 }
                 },
                 "required": ["roots"],
                 "additionalProperties": false
@@ -1106,6 +1121,38 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_projects_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let stale_days = args
+                .and_then(|a| a.get("stale_days"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(projects::DEFAULT_STALE_PROJECT_DAYS);
+            let cancel = Arc::new(AtomicBool::new(false));
+            let plan = project_roots::ScanPlan { roots, excluded: Vec::new() };
+            let found = artifacts::find_artifacts(&plan, &cancel, |_| {});
+            let report = projects::group_artifacts_by_project(&found, stale_days, None);
+            let led = ledger::load_default().summary();
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let html = report_export::render_html(&[], Some(&report), Some(&led), now);
+            tool_outcome(
+                id,
+                json!({
+                    "project_count": report.projects.len(),
+                    "stale_project_count": report.stale_project_count,
+                    "total_reclaimable_bytes": report.total_reclaimable_bytes,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1185,7 +1232,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 29);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 30);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
@@ -1267,6 +1314,20 @@ mod tests {
         assert_eq!(big_resp["result"]["isError"], false);
         let big_payload: Value = serde_json::from_str(big_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(big_payload["returned_files"], 1);
+
+        let proj_html_call = json!({
+            "jsonrpc": "2.0",
+            "id": 30,
+            "method": "tools/call",
+            "params": {
+                "name": "slclean_export_projects_html",
+                "arguments": { "roots": [dir.to_string_lossy()], "stale_days": 0 }
+            }
+        });
+        let proj_html_resp: Value = serde_json::from_str(&handle_message(&proj_html_call.to_string()).unwrap()).unwrap();
+        assert_eq!(proj_html_resp["result"]["isError"], false);
+        let proj_html_payload: Value = serde_json::from_str(proj_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(proj_html_payload["html"].as_str().unwrap().contains("<!doctype html>"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
