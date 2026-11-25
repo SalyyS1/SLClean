@@ -27,7 +27,7 @@ portable exe from [Releases](../../releases); the binary is unsigned, so SmartSc
 |---|---|
 | **Dọn dẹp** | Cache, thư mục tạm và artifact build trên mọi ổ, xem **Theo dự án (`.git`)**, xuất báo cáo **HTML/CSV**, dải tổng quan an toàn, phân loại chi tiết. |
 | **Ứng dụng** | Mọi app đã cài kèm lần mở cuối theo Windows ghi. Gỡ app, hoặc xoá mục "chết" mà Settings không gỡ được. |
-| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files mà không app đã cài nào nhận, kèm **Bộ quét vệ sinh (`SLC010`)** tìm thư mục rỗng & symlink hỏng. |
+| **Thư mục thừa** | Thư mục trong AppData/ProgramData/Program Files app đã gỡ để sót, tích hợp **Trợ Lý Quyết Định Rác AI / Test & Bộ Cài Thừa (`SLC016–SLC018`)** (nhật ký/tạm Claude/Codex/Cursor, `.pytest_cache`, `playwright-report`, `test-results`, file crash dump, worktree AI có chống xóa nhầm code chưa commit, bộ cài `.exe`/`.msi` cũ trong Downloads/Temp) gắn nhãn rõ **✓ XÓA AN TOÀN / ⚠ XEM LẠI / 🛡 NÊN GIỮ** kèm lý do chi tiết và nút **Chọn Xóa An Toàn 1-click**, cùng **Bộ quét vệ sinh (`SLC010`)**. |
 | **File lớn** | File đơn lẻ từ ngưỡng trở lên, kèm bản đồ thư mục và biểu đồ **Squarified Treemap** tương tác. |
 | **File trùng** | Nhóm file giống hệt nhau từng byte, kèm nút chọn nhanh an toàn **Giữ bản mới nhất / Giữ bản cũ nhất** (luôn chừa lại ít nhất 1 bản gốc). |
 | **Khởi động** | Mục tự chạy cùng Windows: Run, thư mục Startup, scheduled task. Bật/tắt không xoá. |

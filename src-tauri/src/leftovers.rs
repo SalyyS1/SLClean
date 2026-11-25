@@ -28,6 +28,10 @@ pub struct Leftover {
     pub last_used: u64,
     /// Chỉ xoá được khi chạy với quyền admin (Program Files, ProgramData).
     pub needs_admin: bool,
+    /// Gợi ý quyết định thông minh: "safe_delete" | "review"
+    pub verdict: String,
+    /// Lý do ngắn gọn giải thích vì sao nên xoá hay cần xem lại.
+    pub reason: Text,
 }
 
 /// Tên (chữ thường) không bao giờ được nêu dù không app nào nhận: thư mục Windows/shell,
@@ -209,7 +213,47 @@ fn scan_area(base: &Path, area: &str, owners: &Owners, usage: &Usage, never: &[&
             continue;
         }
         let (last_used, _) = usage.under_dir(&dir);
-        out.push(Leftover { id: format!("left:{}", lower(&dir)), path: dir.clone(), area: area.into(), note: note_for(area), modified: modified_epoch(&dir), has_exe: has_exe(&dir), last_used, needs_admin });
+        let modified = modified_epoch(&dir);
+        let exe = has_exe(&dir);
+        let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let age_days = if modified > 0 && now > modified { (now - modified) / 86_400 } else { 0 };
+        let (verdict, reason) = if !exe && last_used == 0 && (area == "packages" || age_days >= 30) {
+            (
+                "safe_delete".to_string(),
+                Text::new(
+                    &format!("Không thuộc app nào đang cài, không chứa .exe & đã bỏ trống {age_days} ngày — XÓA AN TOÀN."),
+                    &format!("Unclaimed by any installed app, no .exe inside & idle {age_days}d — SAFE TO DELETE."),
+                ),
+            )
+        } else if exe {
+            (
+                "review".to_string(),
+                Text::new(
+                    "Có chứa file .exe bên trong (có thể là app portable bạn tải tay) — XEM LẠI trước khi xoá.",
+                    "Contains .exe files (may be a standalone/portable app) — REVIEW before deleting.",
+                ),
+            )
+        } else {
+            (
+                "review".to_string(),
+                Text::new(
+                    "App đã gỡ nhưng thư mục mới được ghi gần đây — xem nhanh kẻo còn file cấu hình/save cần giữ.",
+                    "App appears uninstalled, but folder was modified recently — inspect for config/save files first.",
+                ),
+            )
+        };
+        out.push(Leftover {
+            id: format!("left:{}", lower(&dir)),
+            path: dir.clone(),
+            area: area.into(),
+            note: note_for(area),
+            modified,
+            has_exe: exe,
+            last_used,
+            needs_admin,
+            verdict,
+            reason,
+        });
     }
 }
 

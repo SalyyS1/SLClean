@@ -518,13 +518,39 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "slclean_export_rules_badge",
-            "description": "Emit a shields.io Endpoint Badge JSON summarizing SLClean's built-in cache catalog specs and 15 OASIS SARIF v2.1.0 rules (SLC001-SLC015) (read-only).",
+            "description": "Emit a shields.io Endpoint Badge JSON summarizing SLClean's built-in cache catalog specs and 18 OASIS SARIF v2.1.0 rules (SLC001-SLC018) (read-only).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_scan_ai_junk",
+            "description": "Scan AI coding agent residue (Claude Code, Codex, Cursor, Windsurf, Stella, Orca), ephemeral test junk (.pytest_cache, playwright-report, test-results, crash dumps, AI scratch/worktrees with git-dirty protection), and forgotten setup installers (.exe/.msi/.msix), returning Safe-Delete / Review / Keep verdicts with plain-language reasons (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "maximum": 3650 }
+                },
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_ai_junk_html",
+            "description": "Scan AI agent test junk, orphaned worktrees, and forgotten installers and render a self-contained dark-mode HTML Decision Report with Safe-Delete / Review / Keep verdicts (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "stale_days": { "type": "integer", "minimum": 0, "maximum": 3650 }
+                },
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
-            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
+            "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC018).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
             "annotations": { "readOnlyHint": true }
         }
@@ -1551,13 +1577,59 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rule_count": 15,
+                    "sarif_rule_count": 18,
                     "badge": {
                         "schemaVersion": 1,
                         "label": "slclean rules",
-                        "message": format!("{} specs · 15 SARIF rules", specs.len()),
+                        "message": format!("{} specs · 18 SARIF rules", specs.len()),
                         "color": "brightgreen",
                     }
+                }),
+                false,
+            )
+        }
+        "slclean_scan_ai_junk" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|m| m.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|x| x.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            let stale_days = args
+                .and_then(|m| m.get("stale_days"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::ai_junk::DEFAULT_STALE_DAYS);
+            let rep = crate::ai_junk::scan_default(&roots, stale_days);
+            tool_outcome(
+                id,
+                json!({
+                    "report": rep,
+                    "badge": crate::ai_junk::render_badge_json(&rep),
+                }),
+                false,
+            )
+        }
+        "slclean_export_ai_junk_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|m| m.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|x| x.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            let stale_days = args
+                .and_then(|m| m.get("stale_days"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(crate::ai_junk::DEFAULT_STALE_DAYS);
+            let rep = crate::ai_junk::scan_default(&roots, stale_days);
+            let html = crate::ai_junk::render_html(&rep);
+            tool_outcome(
+                id,
+                json!({
+                    "total_count": rep.total_count,
+                    "safe_delete_count": rep.safe_delete_count,
+                    "safe_delete_bytes": rep.safe_delete_bytes,
+                    "review_count": rep.review_count,
+                    "keep_count": rep.keep_count,
+                    "html_bytes": html.len(),
+                    "html": html,
                 }),
                 false,
             )
@@ -1568,7 +1640,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 id,
                 json!({
                     "catalog_spec_count": specs.len(),
-                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013","SLC014","SLC015"],
+                    "sarif_rules": ["SLC001","SLC002","SLC003","SLC004","SLC005","SLC006","SLC007","SLC008","SLC009","SLC010","SLC011","SLC012","SLC013","SLC014","SLC015","SLC016","SLC017","SLC018"],
                     "specs": specs,
                 }),
                 false,
@@ -1642,7 +1714,7 @@ mod tests {
         )
         .unwrap();
         let arr = tools["result"]["tools"].as_array().unwrap();
-        assert_eq!(arr.len(), 40);
+        assert_eq!(arr.len(), 42);
         let unique_names: std::collections::HashSet<&str> = arr.iter().filter_map(|t| t["name"].as_str()).collect();
         assert_eq!(unique_names.len(), arr.len(), "MCP tool names must be strictly unique");
 
@@ -1836,8 +1908,27 @@ mod tests {
         });
         let rb_resp: Value = serde_json::from_str(&handle_message(&rb_call.to_string()).unwrap()).unwrap();
         assert_eq!(rb_resp["result"]["isError"], false);
+
+        let aij_call = json!({
+            "jsonrpc": "2.0",
+            "id": 41,
+            "method": "tools/call",
+            "params": { "name": "slclean_scan_ai_junk", "arguments": { "roots": [dir.to_string_lossy().to_string()], "stale_days": 7 } }
+        });
+        let aij_resp: Value = serde_json::from_str(&handle_message(&aij_call.to_string()).unwrap()).unwrap();
+        assert_eq!(aij_resp["result"]["isError"], false);
+
+        let aij_html_call = json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_ai_junk_html", "arguments": { "roots": [dir.to_string_lossy().to_string()], "stale_days": 7 } }
+        });
+        let aij_html_resp: Value = serde_json::from_str(&handle_message(&aij_html_call.to_string()).unwrap()).unwrap();
+        assert_eq!(aij_html_resp["result"]["isError"], false);
+        assert!(aij_html_resp["result"]["content"][0]["text"].as_str().unwrap().contains("<!doctype html>"));
         let rb_payload: Value = serde_json::from_str(rb_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
-        assert_eq!(rb_payload["sarif_rule_count"], 15);
+        assert_eq!(rb_payload["sarif_rule_count"], 18);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

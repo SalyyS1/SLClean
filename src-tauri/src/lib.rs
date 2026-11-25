@@ -3,6 +3,7 @@
 //! Thùng rác, cài đặt, chọn thư mục. Việc nặng chạy trên thread riêng; kết quả từng mục
 //! được phát qua event để UI cập nhật dần thay vì chờ toàn bộ.
 
+pub mod ai_junk;
 #[cfg(windows)]
 mod apps;
 mod artifacts;
@@ -224,6 +225,15 @@ async fn scan_hygiene(roots: Vec<PathBuf>) -> Result<dead_links::HygieneReport, 
             roots
         };
         dead_links::scan(&effective, 5)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn scan_ai_junk(roots: Vec<PathBuf>, stale_days: Option<u64>) -> Result<ai_junk::AiJunkReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ai_junk::scan_default(&roots, stale_days.unwrap_or(ai_junk::DEFAULT_STALE_DAYS))
     })
     .await
     .map_err(|e| e.to_string())
@@ -606,6 +616,7 @@ pub fn run() {
             clean_ledger_summary,
             scan_projects,
             scan_hygiene,
+            scan_ai_junk,
             export_audit_report,
             render_digest_html_text,
             render_startup_audit_html_text

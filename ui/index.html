@@ -324,7 +324,8 @@
         <div class="scanbar" id="left-scanbar" hidden><span class="scanbar__fill" id="left-scanbar-fill"></span></div>
       </div>
       <div class="board__tools">
-        <button class="btn btn--ghost" id="btn-hygiene-export-html" title="Export Leftovers & Hygiene HTML Audit Report">Export HTML</button>
+        <button class="btn btn--amber" id="btn-ai-junk-scan" data-i18n="left.scanAiJunk">Quét rác AI / Test &amp; Bộ cài</button>
+        <button class="btn btn--ghost" id="btn-hygiene-export-html" title="Export Leftovers, AI Junk & Hygiene HTML Audit Report">Export HTML</button>
         <button class="btn btn--ghost" id="btn-hygiene-scan" data-i18n="left.scanHygiene">Quét thư mục rỗng &amp; symlink hỏng</button>
         <button class="btn btn--line" id="btn-left-scan" data-i18n="board.rescan">Quét lại</button>
       </div>
@@ -337,6 +338,9 @@
       </label>
       <div class="quick" role="group">
         <button class="quick__btn" data-left-filter="all" data-i18n="filter.all">Tất cả</button>
+        <button class="quick__btn" data-left-filter="safe_only" data-i18n="left.filterSafe">✓ Xóa an toàn</button>
+        <button class="quick__btn" data-left-filter="ai_junk" data-i18n="left.filterAiJunk">Rác AI &amp; Test</button>
+        <button class="quick__btn" data-left-filter="installers" data-i18n="left.filterInstallers">Bộ cài thừa</button>
         <button class="quick__btn" data-left-filter="appdata">AppData</button>
         <button class="quick__btn" data-left-filter="programs">Program Files</button>
         <button class="quick__btn" data-left-filter="programdata">ProgramData</button>
@@ -344,6 +348,7 @@
         <button class="quick__btn" data-left-filter="hygiene" data-i18n="left.filterHygiene">Rỗng / Symlink hỏng</button>
       </div>
       <div class="quick" role="group">
+        <button class="quick__btn" data-left-pick="safe" data-i18n="left.pickSafe">✓ Chọn Xóa An Toàn</button>
         <button class="quick__btn" data-left-pick="all" data-i18n="left.pickAll">Chọn đang hiện</button>
         <button class="quick__btn" data-left-pick="none" data-i18n="pick.none">Bỏ chọn</button>
       </div>

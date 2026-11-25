@@ -4,8 +4,8 @@
 //! enforce CI runner disk budgets (`--max-reclaimable-gb`), or preview/execute safe cleanups.
 
 use crate::{
-    artifacts, big_files, blob_dupes, catalog, catalog_specs, cleaner, dead_links, disk_health,
-    drives, elevation, env_reclaimer, ledger, mcp, parallel, project_roots, projects,
+    ai_junk, artifacts, big_files, blob_dupes, catalog, catalog_specs, cleaner, dead_links,
+    disk_health, drives, elevation, env_reclaimer, ledger, mcp, parallel, project_roots, projects,
     report_export, sarif, settings, sizer, startup_audit,
 };
 use serde::Serialize;
@@ -44,6 +44,14 @@ pub enum CliCommand {
     },
     ScanHygiene {
         roots: Vec<PathBuf>,
+        sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
+        out: Option<PathBuf>,
+    },
+    ScanAiJunk {
+        roots: Vec<PathBuf>,
+        stale_days: u64,
         sarif: Option<PathBuf>,
         report_html: Option<PathBuf>,
         badge_json: Option<PathBuf>,
@@ -228,6 +236,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             "--scan-envs" => mode = Some("scan-envs"),
             "--scan-projects" => mode = Some("scan-projects"),
             "--scan-hygiene" => mode = Some("scan-hygiene"),
+            "--scan-ai-junk" => mode = Some("scan-ai-junk"),
             "--scan-extensions" => mode = Some("scan-extensions"),
             "--audit-startup" => mode = Some("audit-startup"),
             "--check-settings" => mode = Some("check-settings"),
@@ -380,6 +389,18 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         })),
         Some("scan-hygiene") => Ok(Some(CliCommand::ScanHygiene {
             roots: env_roots,
+            sarif: sarif_out,
+            report_html,
+            badge_json,
+            out,
+        })),
+        Some("scan-ai-junk") => Ok(Some(CliCommand::ScanAiJunk {
+            roots: env_roots,
+            stale_days: if stale_days == env_reclaimer::DEFAULT_STALE_DAYS {
+                ai_junk::DEFAULT_STALE_DAYS
+            } else {
+                stale_days
+            },
             sarif: sarif_out,
             report_html,
             badge_json,
@@ -1147,6 +1168,23 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                     "message": format!("{} empty · {} broken links", report.empty_dir_count, report.broken_link_count),
                     "color": color,
                 });
+                write_file_creating_dirs(badge_path, &serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?)?;
+            }
+            let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+            emit_output(&json, out.as_ref())?;
+            Ok(0)
+        }
+        CliCommand::ScanAiJunk { roots, stale_days, sarif, report_html, badge_json, out } => {
+            let report = ai_junk::scan_default(&roots, stale_days);
+            if let Some(sarif_path) = sarif.as_ref() {
+                let doc = ai_junk::render_sarif(&report);
+                write_file_creating_dirs(sarif_path, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)?;
+            }
+            if let Some(html_path) = report_html.as_ref() {
+                write_file_creating_dirs(html_path, &ai_junk::render_html(&report))?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let badge = ai_junk::render_badge_json(&report);
                 write_file_creating_dirs(badge_path, &serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?)?;
             }
             let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;

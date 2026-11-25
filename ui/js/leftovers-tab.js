@@ -9,7 +9,11 @@ const leftStats = { total: 0, done: 0 };
 
 /** Bộ lọc riêng của tab (gọi từ passesFilter cho mục group "leftover"). */
 function leftoverPasses(it) {
-  if (leftFilter !== "all" && it.area !== leftFilter) return false;
+  if (leftFilter === "safe_only") {
+    if (it.verdict !== "safe_delete" && it.safety !== "safe") return false;
+  } else if (leftFilter !== "all" && it.area !== leftFilter) {
+    return false;
+  }
   if (!leftQuery) return true;
   return [L(it.label), it.path, L(it.note)].some((s) => String(s).toLowerCase().includes(leftQuery));
 }
@@ -18,14 +22,26 @@ function areaTag(area) {
   return `<b class="tag tag--area">${t(`left.area.${area}`)}</b>`;
 }
 
+function verdictTag(verdict, confidence) {
+  const conf = confidence ? ` ${confidence}%` : "";
+  if (verdict === "safe_delete") {
+    return `<b class="tag tag--hygiene" style="background:rgba(74,222,128,.16);color:#4ade80">✓ ${esc(t("left.verdictSafe"))}${conf}</b>`;
+  }
+  if (verdict === "keep") {
+    return `<b class="tag tag--rebuild" style="background:rgba(96,165,250,.16);color:#60a5fa">🛡 ${esc(t("left.verdictKeep"))}${conf}</b>`;
+  }
+  return `<b class="tag tag--review">⚠ ${esc(t("left.verdictReview"))}${conf}</b>`;
+}
+
 /** Leftover từ backend → mục sổ cái. */
 function leftoverItem(l) {
   const name = String(l.path).split("\\").filter(Boolean).slice(-1)[0] || l.path;
-  const extraTags = [areaTag(l.area)];
+  const verdict = l.verdict || "review";
+  const extraTags = [areaTag(l.area), verdictTag(verdict, verdict === "safe_delete" ? 90 : null)];
   if (l.has_exe) extraTags.push(`<b class="tag tag--exe" title="${esc(t("left.hasExeTitle"))}">${t("left.hasExe")}</b>`);
   return {
-    id: l.id, group: "leftover", area: l.area, label: name, note: l.note, path: l.path, paths: [l.path],
-    bytes: 0, files: 0, safety: "review", keepRoot: false, needsAdmin: l.needs_admin,
+    id: l.id, group: "leftover", area: l.area, verdict, label: name, note: l.reason || l.note, path: l.path, paths: [l.path],
+    bytes: 0, files: 0, safety: verdict === "safe_delete" ? "safe" : "review", keepRoot: false, needsAdmin: l.needs_admin,
     checked: false, gone: false, partial: false, age: l.modified, measuring: true, extraTags,
     lastUsed: l.last_used,
   };
@@ -107,10 +123,71 @@ function pickLeftovers(mode) {
   for (const it of items.values()) {
     if (it.group !== "leftover" || it.gone || unselectable(it)) continue;
     if (mode === "none") { it.checked = false; continue; }
+    // Protect items explicitly advised as KEEP from accidental bulk selection!
+    if (it.verdict === "keep") continue;
+    if (mode === "safe") {
+      if (it.verdict === "safe_delete" || it.safety === "safe") it.checked = true;
+      continue;
+    }
     if (passesFilter(it)) it.checked = true;
   }
   syncVisibleRowChecks();
   refreshTotals();
+}
+
+async function scanAiJunk() {
+  const btn = $("#btn-ai-junk-scan");
+  if (btn) btn.disabled = true;
+  try {
+    const rep = await invoke("scan_ai_junk", { roots: [], staleDays: 7 });
+    for (const [k, it] of items) {
+      if (it.group === "leftover" && (it.area === "ai_junk" || it.area === "installers")) items.delete(k);
+    }
+    for (const f of (rep && rep.findings) || []) {
+      const area = f.category === "leftover_installer" ? "installers" : "ai_junk";
+      const extraTags = [areaTag(area), verdictTag(f.verdict, f.confidence)];
+      if (f.git_dirty) {
+        extraTags.push(`<b class="tag tag--exe" title="Uncommitted git changes detected">git dirty</b>`);
+      }
+      items.set(f.id, {
+        id: f.id,
+        group: "leftover",
+        area,
+        verdict: f.verdict,
+        label: f.name,
+        note: {
+          vi: `${f.reason_vi} — ${f.impact_vi}`,
+          en: `${f.reason_en} — ${f.impact_en}`,
+        },
+        path: f.path,
+        paths: [f.path],
+        bytes: f.bytes || 0,
+        files: f.files || 0,
+        safety: f.verdict === "safe_delete" ? "safe" : (f.verdict === "keep" ? "rebuild" : "review"),
+        keepRoot: false,
+        needsAdmin: false,
+        locked: f.verdict === "keep" && f.git_dirty,
+        checked: false,
+        gone: false,
+        partial: false,
+        age: f.modified || null,
+        measuring: false,
+        extraTags,
+        lastUsed: 0,
+      });
+    }
+    leftFilter = rep && rep.safe_delete_count > 0 ? "safe_only" : "ai_junk";
+    renderAll();
+    toast(t("left.aiJunkFound", {
+      safe: rep?.safe_delete_count || 0,
+      review: rep?.review_count || 0,
+      keep: rep?.keep_count || 0,
+    }));
+  } catch (err) {
+    toast(String(err));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function scanHygiene() {
@@ -156,6 +233,7 @@ async function scanHygiene() {
 }
 
 $("#btn-left-scan").addEventListener("click", scanLeftovers);
+if ($("#btn-ai-junk-scan")) $("#btn-ai-junk-scan").addEventListener("click", scanAiJunk);
 if ($("#btn-hygiene-scan")) $("#btn-hygiene-scan").addEventListener("click", scanHygiene);
 if ($("#btn-hygiene-export-html")) {
   $("#btn-hygiene-export-html").addEventListener("click", () => {
