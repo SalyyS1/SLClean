@@ -45,6 +45,7 @@ pub enum CliCommand {
     ScanHygiene {
         roots: Vec<PathBuf>,
         sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
         badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
@@ -379,6 +380,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
         Some("scan-hygiene") => Ok(Some(CliCommand::ScanHygiene {
             roots: env_roots,
             sarif: sarif_out,
+            report_html,
             badge_json,
             out,
         })),
@@ -1106,7 +1108,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             }
             Ok(0)
         }
-        CliCommand::ScanHygiene { roots, sarif, badge_json, out } => {
+        CliCommand::ScanHygiene { roots, sarif, report_html, badge_json, out } => {
             let effective = if roots.is_empty() {
                 dirs::home_dir().into_iter().collect()
             } else {
@@ -1116,6 +1118,9 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             if let Some(sarif_path) = sarif.as_ref() {
                 let doc = sarif::build_hygiene_sarif(&report);
                 write_file_creating_dirs(sarif_path, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)?;
+            }
+            if let Some(html_path) = report_html.as_ref() {
+                write_file_creating_dirs(html_path, &dead_links::render_hygiene_html(&report))?;
             }
             if let Some(badge_path) = badge_json.as_ref() {
                 let total = report.empty_dir_count + report.broken_link_count;
@@ -1371,15 +1376,18 @@ mod tests {
 
         let hyg_json = root.join("out/hygiene.json");
         let hyg_sarif = root.join("out/hygiene.sarif");
+        let hyg_html = root.join("out/hygiene.html");
         let h_code = execute_command(CliCommand::ScanHygiene {
             roots: vec![root.clone()],
             sarif: Some(hyg_sarif.clone()),
+            report_html: Some(hyg_html.clone()),
             badge_json: None,
             out: Some(hyg_json.clone()),
         })
         .unwrap();
         assert_eq!(h_code, 0);
         assert!(std::fs::read_to_string(&hyg_sarif).unwrap().contains("SLC010"));
+        assert!(std::fs::read_to_string(&hyg_html).unwrap().contains("Directory &amp; Symlink Hygiene Report"));
 
         let _ = std::fs::remove_dir_all(&root);
     }

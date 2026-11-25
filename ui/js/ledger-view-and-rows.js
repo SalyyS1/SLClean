@@ -328,3 +328,28 @@ function syncVisibleRowChecks() {
     li.classList.toggle("row--checked", it.checked);
   }
 }
+
+if ($("#btn-projects-export-html")) {
+  $("#btn-projects-export-html").addEventListener("click", () => {
+    const grouped = new Map();
+    for (const it of items.values()) {
+      if (it.gone || it.group !== "artifacts") continue;
+      const key = it.project || it.paths?.[0] || it.name;
+      if (!grouped.has(key)) grouped.set(key, { project: key, bytes: 0, items: [] });
+      const g = grouped.get(key);
+      g.bytes += Number(it.bytes || 0);
+      g.items.push(it);
+    }
+    const list = [...grouped.values()].sort((a, b) => b.bytes - a.bytes);
+    const totalBytes = list.reduce((s, g) => s + g.bytes, 0);
+    const tr = list.slice(0, 200).map((g) => {
+      const names = g.items.map((x) => `${esc(x.name)} (${esc(fmtBytes(x.bytes || 0))})`).join(", ");
+      return `<tr><td><code>${esc(g.project)}</code></td><td>${g.items.length}</td><td><b>${esc(fmtBytes(g.bytes))}</b></td><td>${names}</td></tr>`;
+    }).join("\n");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean .git Projects Build Artifacts Report</title><style>body{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}.wrap{max-width:1100px;margin:0 auto}.card{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}th{color:#93a89b}code{font-family:ui-monospace,monospace;color:#4ade80}</style></head><body><div class="wrap"><div class="card"><h1>SLClean .git Projects Build Artifacts Report</h1><p>Projects: <b>${list.length}</b> &middot; Total Rebuildable Artifacts: <b>${esc(fmtBytes(totalBytes))}</b></p></div><div class="card"><table><thead><tr><th>Project Path</th><th>Targets</th><th>Total Size</th><th>Artifacts</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-projects-report.html", "text/html;charset=utf-8", html);
+      toast(lang === "vi" ? "Đã xuất slclean-projects-report.html" : "Exported slclean-projects-report.html");
+    }
+  });
+}

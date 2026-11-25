@@ -113,6 +113,42 @@ pub fn scan(roots: &[PathBuf], max_depth: usize) -> HygieneReport {
     }
 }
 
+fn escape_html_hyg(raw: &str) -> String {
+    raw.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Render a self-contained dark-mode HTML Directory & Symlink Hygiene Audit Report (`SLC010`).
+pub fn render_hygiene_html(report: &HygieneReport) -> String {
+    let mut rows = String::new();
+    for f in report.findings.iter().take(300) {
+        let (kind_lbl, color) = match f.kind {
+            HygieneKind::BrokenSymlink => ("BROKEN SYMLINK", "#f87171"),
+            HygieneKind::EmptyDirectory => ("EMPTY DIR", "#f59e0b"),
+        };
+        rows.push_str(&format!(
+            "<tr><td style=\"color:{};font-weight:700\">{}</td><td><code>{}</code></td><td>{}</td></tr>\n",
+            color,
+            kind_lbl,
+            escape_html_hyg(&f.path.display().to_string()),
+            escape_html_hyg(&f.detail),
+        ));
+    }
+    if rows.is_empty() {
+        rows.push_str("<tr><td colspan=\"3\" style=\"color:#4ade80\">Zero empty directories or broken symlinks detected.</td></tr>");
+    }
+    format!(
+        r##"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean v{} Directory &amp; Symlink Hygiene Report</title><style>body{{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:1040px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}}table{{width:100%;border-collapse:collapse;font-size:12.5px}}th,td{{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}}th{{color:#93a89b}}code{{font-family:ui-monospace,monospace;color:#4ade80}}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Directory &amp; Symlink Hygiene Report (SLC010)</h1><p>Empty Leaf Dirs: <b>{}</b> &middot; Broken Symlinks: <b>{}</b> &middot; Total Findings: <b>{}</b></p></div><div class="card"><table><thead><tr><th>Kind</th><th>Path</th><th>Detail</th></tr></thead><tbody>{}</tbody></table></div></div></body></html>"##,
+        env!("CARGO_PKG_VERSION"),
+        report.empty_dir_count,
+        report.broken_link_count,
+        report.findings.len(),
+        rows
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
