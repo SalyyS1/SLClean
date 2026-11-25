@@ -471,6 +471,46 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_startup_badge",
+            "description": "Audit startup entries and emit a shields.io Endpoint Badge JSON summarizing boot health grade (A-F) and estimated login overhead ms (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "command": { "type": "string" },
+                                "enabled": { "type": "boolean", "default": true },
+                                "broken": { "type": "boolean", "default": false },
+                                "system": { "type": "boolean", "default": false },
+                                "stale": { "type": "boolean", "default": false }
+                            },
+                            "required": ["name", "command"]
+                        }
+                    },
+                    "verify_local_paths": { "type": "boolean", "default": false }
+                },
+                "required": ["entries"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_ledger_badge",
+            "description": "Summarize SLClean's persistent Clean Run Ledger (lifetime GiB freed and total cleanup runs) as a shields.io Endpoint Badge JSON (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_settings_badge",
+            "description": "Audit active SLClean settings & exclusion paths and emit a shields.io Endpoint Badge JSON health summary (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -1395,6 +1435,82 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_startup_badge" => {
+            let Some(arr) = args.and_then(|a| a.get("entries")).and_then(|v| v.as_array()) else {
+                return tool_outcome(id, json!({ "error": "'entries' must be an array of startup entry objects." }), true);
+            };
+            let verify_paths = args
+                .and_then(|a| a.get("verify_local_paths"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let mut inputs = Vec::with_capacity(arr.len());
+            for item in arr {
+                if let Ok(parsed) = serde_json::from_value::<startup_audit::StartupAuditInput>(item.clone()) {
+                    inputs.push(parsed);
+                }
+            }
+            let rep = startup_audit::audit_entries(&inputs, verify_paths);
+            let color = match rep.grade.as_str() {
+                "A" | "B" => "brightgreen",
+                "C" => "yellow",
+                _ => "red",
+            };
+            tool_outcome(
+                id,
+                json!({
+                    "grade": rep.grade,
+                    "boot_health_score": rep.boot_health_score,
+                    "estimated_boot_overhead_ms": rep.estimated_boot_overhead_ms,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean startup",
+                        "message": format!("Grade {} ({}ms overhead)", rep.grade, rep.estimated_boot_overhead_ms),
+                        "color": color,
+                    }
+                }),
+                false,
+            )
+        }
+        "slclean_export_ledger_badge" => {
+            let l = ledger::load_default();
+            let s = l.summary();
+            let freed_gib = s.lifetime_freed_bytes as f64 / 1073741824.0;
+            tool_outcome(
+                id,
+                json!({
+                    "total_runs": s.total_runs,
+                    "lifetime_freed_bytes": s.lifetime_freed_bytes,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean reclaimed",
+                        "message": format!("{:.2} GiB ({} runs)", freed_gib, s.total_runs),
+                        "color": if s.total_runs > 0 { "brightgreen" } else { "blue" },
+                    }
+                }),
+                false,
+            )
+        }
+        "slclean_export_settings_badge" => {
+            let s = settings::load_offline();
+            let audit = settings::audit_settings(&s);
+            let issues = audit.missing_extra_roots.len()
+                + audit.missing_excluded_roots.len()
+                + audit.redundant_exclusions.len();
+            tool_outcome(
+                id,
+                json!({
+                    "healthy": audit.healthy,
+                    "issue_count": issues,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean settings",
+                        "message": if audit.healthy { "HEALTHY".to_string() } else { format!("{} ISSUE(S)", issues) },
+                        "color": if audit.healthy { "brightgreen" } else { "yellow" },
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1475,7 +1591,7 @@ mod tests {
         )
         .unwrap();
         let arr = tools["result"]["tools"].as_array().unwrap();
-        assert_eq!(arr.len(), 35);
+        assert_eq!(arr.len(), 38);
         let unique_names: std::collections::HashSet<&str> = arr.iter().filter_map(|t| t["name"].as_str()).collect();
         assert_eq!(unique_names.len(), arr.len(), "MCP tool names must be strictly unique");
 
@@ -1617,6 +1733,40 @@ mod tests {
         assert_eq!(drv_badge_resp["result"]["isError"], false);
         let drv_badge_payload: Value = serde_json::from_str(drv_badge_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(drv_badge_payload["badge"]["label"], "slclean drives");
+
+        let sb_call = json!({
+            "jsonrpc": "2.0",
+            "id": 36,
+            "method": "tools/call",
+            "params": {
+                "name": "slclean_export_startup_badge",
+                "arguments": {
+                    "entries": [{ "name": "SecurityHealth", "command": "C:\\Windows\\System32\\SecurityHealthSystray.exe", "system": true }]
+                }
+            }
+        });
+        let sb_resp: Value = serde_json::from_str(&handle_message(&sb_call.to_string()).unwrap()).unwrap();
+        assert_eq!(sb_resp["result"]["isError"], false);
+        let sb_payload: Value = serde_json::from_str(sb_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(sb_payload["badge"]["label"], "slclean startup");
+
+        let lb_call = json!({
+            "jsonrpc": "2.0",
+            "id": 37,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_ledger_badge", "arguments": {} }
+        });
+        let lb_resp: Value = serde_json::from_str(&handle_message(&lb_call.to_string()).unwrap()).unwrap();
+        assert_eq!(lb_resp["result"]["isError"], false);
+
+        let setb_call = json!({
+            "jsonrpc": "2.0",
+            "id": 38,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_settings_badge", "arguments": {} }
+        });
+        let setb_resp: Value = serde_json::from_str(&handle_message(&setb_call.to_string()).unwrap()).unwrap();
+        assert_eq!(setb_resp["result"]["isError"], false);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
