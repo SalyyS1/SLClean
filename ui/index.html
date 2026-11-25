@@ -136,7 +136,8 @@
         <div class="scanbar" id="scanbar" hidden><span class="scanbar__fill" id="scanbar-fill"></span></div>
       </div>
       <div class="board__tools">
-        <button class="btn btn--amber" id="btn-quick" data-i18n="hero.quickSafe">Dọn nhanh phần an toàn</button>
+        <button class="btn btn--amber" id="btn-smart-all" data-i18n="hero.smartAll" title="Quét đồng thời Cache, Build Artifact & Rác AI/Codex (Documents)">✦ Quét toàn diện</button>
+        <button class="btn btn--line" id="btn-quick" data-i18n="hero.quickSafe">Dọn nhanh phần an toàn</button>
         <button class="btn btn--line" id="btn-scan" data-i18n="board.rescan">Quét lại</button>
         <button class="btn btn--ghost" id="btn-export-html" data-i18n="export.html" title="Export self-contained HTML audit report">Xuất HTML</button>
         <button class="btn btn--ghost" id="btn-export-csv" data-i18n="export.csv" title="Export CSV report">Xuất CSV</button>
@@ -381,6 +382,29 @@
         <button class="btn btn--line" id="btn-left-scan" data-i18n="board.rescan">Quét lại</button>
       </div>
     </header>
+
+    <div class="decision-banner" id="left-decision-banner" aria-label="AI Decision Summary">
+      <button type="button" class="decision-tile decision-tile--safe" data-left-filter="safe_only">
+        <span class="decision-tile__label" data-i18n="left.tileSafe">✓ Xóa An Toàn</span>
+        <span class="decision-tile__val" id="tile-safe-bytes">0 B</span>
+        <span class="decision-tile__meta" id="tile-safe-count">0 mục</span>
+      </button>
+      <button type="button" class="decision-tile decision-tile--docs" data-left-filter="documents_junk">
+        <span class="decision-tile__label" data-i18n="left.tileDocs">✦ Documents / Codex</span>
+        <span class="decision-tile__val" id="tile-docs-bytes">0 B</span>
+        <span class="decision-tile__meta" id="tile-docs-count">0 mục</span>
+      </button>
+      <button type="button" class="decision-tile decision-tile--review" data-left-filter="review_only">
+        <span class="decision-tile__label" data-i18n="left.tileReview">⚠ Cần Xem Lại</span>
+        <span class="decision-tile__val" id="tile-review-bytes">0 B</span>
+        <span class="decision-tile__meta" id="tile-review-count">0 mục</span>
+      </button>
+      <button type="button" class="decision-tile decision-tile--keep" data-left-filter="keep_only">
+        <span class="decision-tile__label" data-i18n="left.tileKeep">🛡 Đang Bảo Vệ</span>
+        <span class="decision-tile__val" id="tile-keep-bytes">0 B</span>
+        <span class="decision-tile__meta" id="tile-keep-count">0 mục</span>
+      </button>
+    </div>
 
     <div class="viewbar">
       <label class="search">
@@ -652,6 +676,26 @@
     </section>
 
     <section class="settings__section">
+      <h4 data-i18n="settings.appearance">Giao diện Rem Aqua &amp; Mật độ</h4>
+      <div class="settings__row">
+        <div class="segmented" aria-label="Theme">
+          <label><input type="radio" name="ui-theme" value="rem-aqua"><span>❄ Rem Aqua</span></label>
+          <label><input type="radio" name="ui-theme" value="rem-twilight"><span>☾ Rem Twilight</span></label>
+          <label><input type="radio" name="ui-theme" value="glacier-mist"><span>☀ Glacier Light</span></label>
+        </div>
+        <div class="segmented" aria-label="Ambient FX">
+          <label><input type="radio" name="ui-fx" value="calm"><span>✦ FX: Nhẹ</span></label>
+          <label><input type="radio" name="ui-fx" value="dreamy"><span>✦ FX: Mơ màng</span></label>
+          <label><input type="radio" name="ui-fx" value="off"><span>Tắt</span></label>
+        </div>
+      </div>
+      <div class="segmented" aria-label="Row Density">
+        <label><input type="radio" name="ui-density" value="comfortable"><span data-i18n="settings.densityComfy">Thoải mái</span></label>
+        <label><input type="radio" name="ui-density" value="compact"><span data-i18n="settings.densityCompact">Gọn nhẹ</span></label>
+      </div>
+    </section>
+
+    <section class="settings__section">
       <h4 data-i18n="settings.roots">Thư mục dự án để tìm artifact</h4>
       <p class="settings__hint" data-i18n="settings.rootsHint"></p>
       <div class="settings__lists">
@@ -706,6 +750,22 @@
     <button type="button" class="btn btn--ghost btn--sm" onclick="document.getElementById('cmd-palette').close()">ESC</button>
   </div>
   <ul class="cmd__list" id="cmd-list"></ul>
+</dialog>
+
+<dialog class="confirm" id="shortcuts-dialog">
+  <form method="dialog" class="confirm__form">
+    <h3 class="confirm__title" data-i18n="shortcuts.title">Phím tắt nhanh</h3>
+    <div class="kbd-grid">
+      <div class="kbd-row"><span data-i18n="shortcuts.cmd">Mở bảng lệnh nhanh (Command Palette)</span><kbd>Ctrl + K</kbd></div>
+      <div class="kbd-row"><span data-i18n="shortcuts.tabs">Chuyển nhanh 7 tab (Dọn dẹp → Nhật ký)</span><kbd>Alt + 1..7</kbd></div>
+      <div class="kbd-row"><span data-i18n="shortcuts.rescan">Quét lại tab đang mở</span><kbd>F5</kbd></div>
+      <div class="kbd-row"><span data-i18n="shortcuts.help">Hiện bảng phím tắt này</span><kbd>?</kbd></div>
+      <div class="kbd-row"><span data-i18n="shortcuts.esc">Đóng hộp thoại / xoá ô tìm kiếm</span><kbd>Esc</kbd></div>
+    </div>
+    <div class="confirm__actions">
+      <button class="btn btn--amber" value="ok" data-i18n="progress.close">Đóng</button>
+    </div>
+  </form>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

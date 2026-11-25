@@ -25,6 +25,9 @@
     currentFx = "off";
   }
 
+  let currentDensity = localStorage.getItem("slclean-density") || "comfortable";
+  if (currentDensity !== "compact" && currentDensity !== "comfortable") currentDensity = "comfortable";
+
   function curLang() {
     return typeof lang !== "undefined" && lang === "en" ? "en" : "vi";
   }
@@ -33,6 +36,7 @@
     currentTheme = THEMES.includes(name) ? name : "rem-aqua";
     document.documentElement.dataset.theme = currentTheme;
     localStorage.setItem("slclean-theme", currentTheme);
+    syncSettingsRadios();
     updatePills();
   }
 
@@ -43,7 +47,24 @@
     const canvas = document.getElementById("rem-ambient-canvas");
     if (canvas) canvas.hidden = currentFx === "off";
     rebuildParticles();
+    syncSettingsRadios();
     updatePills();
+  }
+
+  function applyDensity(mode) {
+    currentDensity = mode === "compact" ? "compact" : "comfortable";
+    document.documentElement.dataset.density = currentDensity;
+    localStorage.setItem("slclean-density", currentDensity);
+    syncSettingsRadios();
+  }
+
+  function syncSettingsRadios() {
+    const t = document.querySelector(`input[name="ui-theme"][value="${currentTheme}"]`);
+    if (t) t.checked = true;
+    const f = document.querySelector(`input[name="ui-fx"][value="${currentFx}"]`);
+    if (f) f.checked = true;
+    const d = document.querySelector(`input[name="ui-density"][value="${currentDensity}"]`);
+    if (d) d.checked = true;
   }
 
   function updatePills() {
@@ -170,7 +191,8 @@
     const l = curLang();
     const vi = l === "vi";
     return [
-      { id: "scan-ai", icon: "✦", label: vi ? "Quét Rác AI, Codex (Documents) & Bộ cài thừa" : "Scan AI, Codex (Documents) Junk & Old Installers", hint: "SLC016–SLC019", run: () => { switchTabSafe("leftovers"); setTimeout(() => document.getElementById("btn-ai-junk-scan")?.click(), 60); } },
+      { id: "smart-all", icon: "✦", label: vi ? "Quét Toàn Diện (Cache + Build Artifacts + Rác AI/Codex Documents)" : "All-in-One Smart Scan (Caches + Artifacts + AI/Codex Documents)", hint: "1-Click", run: () => document.getElementById("btn-smart-all")?.click() },
+      { id: "scan-ai", icon: "❄", label: vi ? "Quét Rác AI, Codex (Documents) & Bộ cài thừa" : "Scan AI, Codex (Documents) Junk & Old Installers", hint: "SLC016–SLC019", run: () => { switchTabSafe("leftovers"); setTimeout(() => document.getElementById("btn-ai-junk-scan")?.click(), 60); } },
       { id: "pick-safe", icon: "✓", label: vi ? "Chọn tất cả mục Xóa An Toàn 100%" : "Select all 100% Safe-to-Delete items", hint: "Safe only", run: () => { const active = document.querySelector(".tab.is-active")?.dataset.tab; if (active === "leftovers") document.querySelector('[data-left-pick="safe"]')?.click(); else document.querySelector('[data-pick="safe"]')?.click(); } },
       { id: "tab-clean", icon: "🧹", label: vi ? "Mở tab Dọn dẹp (Cache & Build Artifacts)" : "Open Clean tab (Caches & Build Artifacts)", hint: "Alt+1", run: () => switchTabSafe("clean") },
       { id: "tab-left", icon: "📁", label: vi ? "Mở tab Thư mục thừa & Rác Codex/Documents" : "Open Leftovers & Codex/Documents Junk", hint: "Alt+3", run: () => switchTabSafe("leftovers") },
@@ -179,6 +201,8 @@
       { id: "tab-startup", icon: "⚡", label: vi ? "Mở tab Khởi động & Điểm Boot Grade" : "Open Startup & Boot Health Grade", hint: "Alt+6", run: () => switchTabSafe("startup") },
       { id: "theme", icon: "❄", label: vi ? "Đổi giao diện (Rem Aqua / Rem Twilight / Glacier)" : "Switch Theme (Rem Aqua / Rem Twilight / Glacier)", hint: currentTheme, run: () => applyTheme(THEMES[(THEMES.indexOf(currentTheme) + 1) % THEMES.length]) },
       { id: "fx", icon: "✨", label: vi ? "Chỉnh hiệu ứng nền động Anime (Nhẹ / Mơ màng / Tắt)" : "Cycle Anime Ambient FX (Calm / Dreamy / Off)", hint: currentFx, run: () => applyFx(FX_MODES[(FX_MODES.indexOf(currentFx) + 1) % FX_MODES.length]) },
+      { id: "density", icon: "☰", label: vi ? "Đổi mật độ hàng (Thoải mái / Gọn nhẹ)" : "Toggle Row Density (Comfortable / Compact)", hint: currentDensity, run: () => applyDensity(currentDensity === "compact" ? "comfortable" : "compact") },
+      { id: "shortcuts", icon: "⌨", label: vi ? "Xem bảng phím tắt nhanh" : "Show Keyboard Shortcuts Cheatsheet", hint: "?", run: () => document.getElementById("shortcuts-dialog")?.showModal() },
       { id: "export", icon: "📄", label: vi ? "Xuất báo cáo kiểm toán HTML" : "Export HTML Audit Report", hint: "HTML", run: () => document.getElementById("btn-export-html")?.click() },
     ];
   }
@@ -229,6 +253,7 @@
     }
     applyTheme(currentTheme);
     applyFx(currentFx);
+    applyDensity(currentDensity);
     if (canvas) rafId = requestAnimationFrame(tick);
 
     document.getElementById("btn-theme-cycle")?.addEventListener("click", () => {
@@ -238,6 +263,28 @@
       applyFx(FX_MODES[(FX_MODES.indexOf(currentFx) + 1) % FX_MODES.length]);
     });
     document.getElementById("btn-cmd-open")?.addEventListener("click", openPalette);
+
+    // 1-Click All-in-One Smart Scan (Clean Caches + AI/Codex Documents Junk)
+    document.getElementById("btn-smart-all")?.addEventListener("click", () => {
+      document.getElementById("btn-scan")?.click();
+      if (typeof scanAiJunk === "function") {
+        setTimeout(() => scanAiJunk(), 120);
+      }
+      if (typeof toast === "function") {
+        toast(curLang() === "vi" ? "✦ Đang quét toàn diện: Cache, Artifact & Rác AI/Codex (Documents)…" : "✦ Running All-in-One Smart Scan (Caches + Artifacts + AI/Codex Documents)…");
+      }
+    });
+
+    // Live Appearance & Density radios inside Settings dialog
+    for (const r of document.querySelectorAll('input[name="ui-theme"]')) {
+      r.addEventListener("change", () => applyTheme(r.value));
+    }
+    for (const r of document.querySelectorAll('input[name="ui-fx"]')) {
+      r.addEventListener("change", () => applyFx(r.value));
+    }
+    for (const r of document.querySelectorAll('input[name="ui-density"]')) {
+      r.addEventListener("change", () => applyDensity(r.value));
+    }
 
     // Quick-action launcher cards on Clean tab
     document.getElementById("qa-codex-docs")?.addEventListener("click", () => {
@@ -263,6 +310,13 @@
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         openPalette();
+      } else if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = (e.target && e.target.tagName) || "";
+        if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+          e.preventDefault();
+          const sd = document.getElementById("shortcuts-dialog");
+          if (sd && !sd.open) sd.showModal();
+        }
       }
     });
 

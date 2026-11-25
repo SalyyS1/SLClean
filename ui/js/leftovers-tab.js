@@ -11,6 +11,10 @@ const leftStats = { total: 0, done: 0 };
 function leftoverPasses(it) {
   if (leftFilter === "safe_only") {
     if (it.verdict !== "safe_delete" && it.safety !== "safe") return false;
+  } else if (leftFilter === "review_only") {
+    if (it.verdict !== "review" && it.safety !== "review") return false;
+  } else if (leftFilter === "keep_only") {
+    if (it.verdict !== "keep") return false;
   } else if (leftFilter !== "all" && it.area !== leftFilter) {
     return false;
   }
@@ -58,15 +62,32 @@ function paintLeftProgress() {
 
 function refreshLeftTotals() {
   let n = 0, bytes = 0, hidden = 0;
+  let safeN = 0, safeB = 0, docsN = 0, docsB = 0, revN = 0, revB = 0, keepN = 0, keepB = 0;
   for (const it of items.values()) {
     if (it.group !== "leftover" || it.gone) continue;
     n++;
-    bytes += it.bytes;
-    if (!passesFilter(it) && it.bytes > 0) hidden++;
+    const b = Number(it.bytes || 0);
+    bytes += b;
+    if (!passesFilter(it) && b > 0) hidden++;
+    if (it.verdict === "safe_delete" || it.safety === "safe") { safeN++; safeB += b; }
+    else if (it.verdict === "keep") { keepN++; keepB += b; }
+    else { revN++; revB += b; }
+    if (it.area === "documents_junk") { docsN++; docsB += b; }
   }
   $("#left-hero").textContent = n ? fmtBytes(bytes) : "—";
   if (!leftScanning) $("#left-sub").textContent = n ? t("left.summary", { n }) : t("left.subIdle");
   $("#left-hint").textContent = hidden ? t("filter.hintCount", { n: hidden }) : "";
+  const unit = lang === "en" ? "items" : "mục";
+  const setTile = (idB, idC, bVal, cVal) => {
+    const eb = $(idB), ec = $(idC);
+    if (eb) eb.textContent = fmtBytes(bVal);
+    if (ec) ec.textContent = `${cVal} ${unit}`;
+  };
+  setTile("#tile-safe-bytes", "#tile-safe-count", safeB, safeN);
+  setTile("#tile-docs-bytes", "#tile-docs-count", docsB, docsN);
+  setTile("#tile-review-bytes", "#tile-review-count", revB, revN);
+  setTile("#tile-keep-bytes", "#tile-keep-count", keepB, keepN);
+
   const list = $("#left-list");
   $("#left-empty").hidden = list.children.length > 0 || leftScanning;
   $("#left-empty").textContent = n ? t("flat.empty") : t("left.empty");
@@ -244,7 +265,7 @@ if ($("#btn-hygiene-export-html")) {
     const tr = list.slice(0, 200).map((it) =>
       `<tr><td><b>${esc(it.label)}</b></td><td><code>${esc(it.area || "leftover")}</code></td><td>${esc(fmtBytes(it.bytes || 0))}</td><td><code>${esc(it.path || "")}</code></td></tr>`
     ).join("\n");
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean Leftovers &amp; Hygiene Report</title><style>body{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}.wrap{max-width:1020px;margin:0 auto}.card{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left}th{color:#93a89b}code{font-family:ui-monospace,monospace;color:#4ade80}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Leftovers &amp; Filesystem Hygiene Report</h1><p>Entries: <b>${list.length}</b> &middot; Reclaimable: <b>${esc(fmtBytes(totalBytes))}</b></p></div><div class="card"><table><thead><tr><th>Name</th><th>Area</th><th>Size</th><th>Path</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean Rem Aqua — Leftovers, Codex &amp; AI Junk Report</title><style>body{margin:0;padding:28px;background:#09131e;color:#ebf7fc;font-family:system-ui,sans-serif}.wrap{max-width:1040px;margin:0 auto}.card{background:#0f1e2e;border:1px solid rgba(114,211,244,0.22);border-radius:12px;padding:18px;margin-bottom:16px}h1{color:#5fd4f4;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:9px 10px;border-bottom:1px solid rgba(114,211,244,0.12);text-align:left}th{color:#84a8be}code{font-family:ui-monospace,monospace;color:#f48fb1}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Rem Aqua — Leftovers, Codex &amp; Hygiene Report</h1><p>Entries: <b>${list.length}</b> &middot; Reclaimable: <b>${esc(fmtBytes(totalBytes))}</b></p></div><div class="card"><table><thead><tr><th>Name</th><th>Area</th><th>Size</th><th>Path</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
     if (typeof downloadBlob === "function") {
       downloadBlob("slclean-leftovers-hygiene.html", "text/html;charset=utf-8", html);
       toast(lang === "vi" ? "Đã xuất slclean-leftovers-hygiene.html" : "Exported slclean-leftovers-hygiene.html");

@@ -1,22 +1,29 @@
-/* Tab File trùng: mỗi nhóm là một khối gập được, đầu nhóm cho biết cỡ một bản và lấy lại được
+/* Tab File trùng: Rem Aqua frosted-glass groups — đầu nhóm cho biết cỡ một bản và lấy lại được
    bao nhiêu, bên trong là từng bản để người dùng tự chọn bản nào bỏ. */
 .dupe {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   margin: 0 0 10px;
   overflow: hidden;
+  background: var(--moss-2);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(4, 11, 20, 0.22);
+  transition: border-color 140ms, box-shadow 140ms;
   animation: row-in var(--dur) var(--ease) both;
 }
-/* Tick hết mọi bản trong nhóm = xoá sạch file khỏi máy. Viền đỏ để không ai làm nhầm. */
-.dupe--all-checked { border-color: var(--ember); }
+.dupe:hover {
+  border-color: rgba(95, 212, 244, 0.34);
+}
+/* Tick hết mọi bản trong nhóm = xoá sạch file khỏi máy. Viền hồng đậm để không ai làm nhầm. */
+.dupe--all-checked { border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember-tint); }
 
 .dupe__head {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto;
   align-items: center;
   gap: 12px;
-  padding: 9px 14px;
-  background: var(--moss-2);
+  padding: 10px 15px;
+  background: var(--moss-3);
 }
 .dupe--all-checked .dupe__head { background: var(--ember-tint); }
 
@@ -38,6 +45,7 @@
   font-size: 13.5px;
   font-variant-numeric: tabular-nums;
   color: var(--amber);
+  font-weight: 600;
   min-width: 9ch;
   text-align: right;
 }
@@ -48,9 +56,10 @@
   grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
+  padding: 9px 15px;
   border-top: 1px solid var(--line-soft);
   cursor: pointer;
+  transition: background-color 120ms;
 }
-.dupe__file:hover { background: var(--moss-2); }
+.dupe__file:hover { background: var(--amber-tint); }
 .dupe__main { min-width: 0; display: grid; gap: 2px; }
