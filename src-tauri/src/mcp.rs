@@ -432,6 +432,27 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_dupes_html",
+            "description": "Scan directories for byte-identical duplicate AI weights (.safetensors, .gguf, .bin) and large blobs and render a self-contained dark-mode HTML Duplicate Blob Report (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "min_mb": { "type": "number", "minimum": 0.001, "default": 10.0 },
+                    "trust_cas_names": { "type": "boolean", "default": true }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_ledger_html",
+            "description": "Render SLClean's persistent Clean Run Ledger (lifetime reclaimed bytes, Recycle Bin vs Permanent breakdown, and recent cleanup runs) as a self-contained dark-mode HTML Audit Trail (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -1153,6 +1174,67 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_dupes_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let min_mb = args.and_then(|a| a.get("min_mb")).and_then(|v| v.as_f64()).unwrap_or(10.0).max(0.001);
+            let min_bytes = (min_mb * 1024.0 * 1024.0).round() as u64;
+            let trust_cas = args.and_then(|a| a.get("trust_cas_names")).and_then(|v| v.as_bool()).unwrap_or(true);
+            let cancel = AtomicBool::new(false);
+            let rep = blob_dupes::scan_blobs(&roots, min_bytes, trust_cas, &cancel);
+            let html = blob_dupes::render_dupes_html(&rep);
+            tool_outcome(
+                id,
+                json!({
+                    "group_count": rep.groups.len(),
+                    "total_wasted_bytes": rep.total_wasted_bytes,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
+        "slclean_export_ledger_html" => {
+            let l = ledger::load_default();
+            let s = l.summary();
+            let mut rows = String::new();
+            for r in l.runs.iter().rev().take(25) {
+                let mode = if r.to_trash { "Recycle Bin" } else { "Permanent" };
+                let src = r.source.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                let rid = r.run_id.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                rows.push_str(&format!(
+                    "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td style=\"text-align:right\">{:.2} MiB</td><td style=\"text-align:right\">{}</td></tr>\n",
+                    rid, r.timestamp, mode, src, r.total_freed as f64 / (1024.0 * 1024.0), r.total_removed
+                ));
+            }
+            if rows.is_empty() {
+                rows.push_str("<tr><td colspan=\"6\" style=\"color:#93a89b\">No cleanup runs recorded in Clean Run Ledger yet.</td></tr>");
+            }
+            let html = format!(
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean Clean Run Ledger Audit Trail</title><style>body{{margin:0;padding:28px;background:#101512;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:980px;margin:0 auto}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:8px;padding:12px}}table{{width:100%;border-collapse:collapse;background:#161d19;border:1px solid #2a3730}}th,td{{padding:8px 10px;border-bottom:1px solid #2a3730;font-size:13px;text-align:left}}th{{color:#93a89b;font-size:11px;text-transform:uppercase}}</style></head><body><div class=\"wrap\"><h1>SLClean Clean Run Ledger Audit Trail</h1><div class=\"cards\"><div class=\"card\"><div>Lifetime Freed</div><strong>{:.2} GiB</strong></div><div class=\"card\"><div>Total Runs</div><strong>{}</strong></div><div class=\"card\"><div>Recycle Bin Runs</div><strong>{}</strong></div><div class=\"card\"><div>Permanent Runs</div><strong>{}</strong></div></div><table><thead><tr><th>Run ID</th><th>Timestamp</th><th>Mode</th><th>Source</th><th style=\"text-align:right\">Freed</th><th style=\"text-align:right\">Items</th></tr></thead><tbody>{}</tbody></table></div></body></html>",
+                s.lifetime_freed_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+                s.total_runs,
+                s.trash_runs,
+                s.permanent_runs,
+                rows
+            );
+            tool_outcome(
+                id,
+                json!({
+                    "total_runs": s.total_runs,
+                    "lifetime_freed_bytes": s.lifetime_freed_bytes,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1232,7 +1314,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 30);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 32);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
@@ -1328,6 +1410,17 @@ mod tests {
         assert_eq!(proj_html_resp["result"]["isError"], false);
         let proj_html_payload: Value = serde_json::from_str(proj_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert!(proj_html_payload["html"].as_str().unwrap().contains("<!doctype html>"));
+
+        let led_html_call = json!({
+            "jsonrpc": "2.0",
+            "id": 32,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_ledger_html", "arguments": {} }
+        });
+        let led_html_resp: Value = serde_json::from_str(&handle_message(&led_html_call.to_string()).unwrap()).unwrap();
+        assert_eq!(led_html_resp["result"]["isError"], false);
+        let led_html_payload: Value = serde_json::from_str(led_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(led_html_payload["html"].as_str().unwrap().contains("Clean Run Ledger Audit Trail"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

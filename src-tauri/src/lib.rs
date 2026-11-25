@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! Lệnh Tauri cho giao diện: liệt kê ổ đĩa, quét danh mục cache, tìm artifact build, dọn,
 //! Thùng rác, cài đặt, chọn thư mục. Việc nặng chạy trên thread riêng; kết quả từng mục
 //! được phát qua event để UI cập nhật dần thay vì chờ toàn bộ.

@@ -248,6 +248,25 @@ if ($("#btn-digest-html")) {
     }
   });
 }
+if ($("#btn-hist-drift-html")) {
+  $("#btn-hist-drift-html").addEventListener("click", () => {
+    if (!histDiff || !Array.isArray(histDiff.changes)) {
+      toast(lang === "vi" ? "Cần ít nhất 2 mốc quét để xuất báo cáo biến động." : "Need at least 2 scan snapshots to export drift HTML.");
+      return;
+    }
+    const rows = histDiff.changes.map((c) => {
+      const from = c.before === null ? "—" : fmtBytes(c.before);
+      const to = c.after === null ? "—" : fmtBytes(c.after);
+      const col = c.delta > 0 ? "#f87171" : "#4ade80";
+      return `<tr><td>${esc(histLabel(c))}</td><td>${esc(c.group || "")}</td><td style="text-align:right;font-family:monospace">${from} &rarr; ${to}</td><td style="text-align:right;font-family:monospace;color:${col}">${fmtDelta(c.delta)}</td></tr>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>SLClean Storage Drift Report</title><style>body{font-family:system-ui,sans-serif;background:#101512;color:#e6efe9;padding:24px;max-width:960px;margin:0 auto}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #2a3730;padding:8px 10px;text-align:left;font-size:13px}th{color:#93a89b;text-transform:uppercase;font-size:11px}</style></head><body><h1>SLClean Storage Drift Report</h1><p>Window: <b>${esc(fmtStamp(histDiff.from))} &rarr; ${esc(fmtStamp(histDiff.to))}</b> &middot; Net Delta: <b>${fmtDelta(histDiff.total_delta)}</b> &middot; ${histDiff.changes.length} changed item(s).</p><table><thead><tr><th>Item</th><th>Group</th><th style="text-align:right">Before &rarr; After</th><th style="text-align:right">Delta</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-storage-drift.html", "text/html;charset=utf-8", html);
+      toast(lang === "vi" ? "Đã xuất slclean-storage-drift.html" : "Exported slclean-storage-drift.html");
+    }
+  });
+}
 for (const b of document.querySelectorAll("[data-hist-filter]")) {
   b.addEventListener("click", () => { histFilter = b.dataset.histFilter; renderHistory(); });
 }
