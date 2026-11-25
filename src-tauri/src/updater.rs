@@ -1,13 +1,16 @@
-//! Lightweight GitHub Releases update checker for SLClean.
+//! Lightweight GitHub Releases auto-updater for SLClean.
 //! Zero extra crate dependencies: uses TLS-enabled OS HTTP tooling (`powershell` with
-//! `CREATE_NO_WINDOW` on Windows, `curl` on Unix) and parses the official GitHub Releases
-//! API JSON via `serde_json`. Strictly validates release URLs before opening a browser.
+//! `CREATE_NO_WINDOW` on Windows, `curl` on Unix), parses GitHub Releases API JSON,
+//! strictly validates official `SalyyS1/SLClean` asset URLs, downloads the 2 MB NSIS
+//! installer directly to `%TEMP%`, and launches in-place self-upgrade inside the app.
+#![cfg_attr(not(windows), allow(dead_code))]
 
 use serde::Serialize;
 use std::process::Command;
 
 pub const RELEASES_API_URL: &str = "https://api.github.com/repos/SalyyS1/SLClean/releases/latest";
 pub const ALLOWED_URL_PREFIX: &str = "https://github.com/SalyyS1/SLClean/";
+pub const ALLOWED_DOWNLOAD_PREFIX: &str = "https://github.com/SalyyS1/SLClean/releases/download/";
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct UpdateInfo {
@@ -51,6 +54,75 @@ pub fn validate_release_url(url: &str) -> Result<String, String> {
         return Err("URL contains disallowed characters".into());
     }
     Ok(trimmed.to_string())
+}
+
+/// Validates an installer download URL for in-app auto-update (strictly `.exe` from official releases).
+pub fn validate_installer_url(url: &str) -> Result<String, String> {
+    let safe = validate_release_url(url)?;
+    if !safe.starts_with(ALLOWED_DOWNLOAD_PREFIX) || !safe.to_ascii_lowercase().ends_with(".exe") {
+        return Err("Refusing to auto-install non-official or non-EXE asset".into());
+    }
+    Ok(safe)
+}
+
+/// Sanitizes a SemVer string into a safe filename token (digits & dots only).
+pub fn sanitize_version_token(ver: &str) -> Result<String, String> {
+    let clean = ver.trim().trim_start_matches(['v', 'V']);
+    if parse_semver(clean).is_none() || !clean.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return Err(format!("Invalid version string: {ver}"));
+    }
+    Ok(clean.to_string())
+}
+
+/// Downloads the official Windows installer directly into `%TEMP%` and launches in-place upgrade.
+#[cfg(windows)]
+pub fn download_and_install_update(url: &str, version: &str) -> Result<String, String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let safe_url = validate_installer_url(url)?;
+    let safe_ver = sanitize_version_token(version)?;
+    let is_setup = safe_url.to_ascii_lowercase().contains("setup.exe");
+    let dest = std::env::temp_dir().join(format!("SLClean-update-{safe_ver}.exe"));
+    let dest_str = dest.to_string_lossy().replace('\'', "''");
+
+    let ps = format!(
+        "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+         $ProgressPreference = 'SilentlyContinue'; \
+         Invoke-WebRequest -UseBasicParsing -TimeoutSec 90 \
+         -Headers @{{'User-Agent'='SLClean-AutoUpdater'}} \
+         -Uri '{safe_url}' -OutFile '{dest_str}'"
+    );
+    let out = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("Không tải được bản cập nhật: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() { "Tải bản cập nhật thất bại".into() } else { err });
+    }
+    let meta = std::fs::metadata(&dest).map_err(|e| format!("Không tìm thấy tệp cài đặt đã tải: {e}"))?;
+    if meta.len() < 200_000 {
+        let _ = std::fs::remove_file(&dest);
+        return Err("Tệp cập nhật tải về quá nhỏ / không hợp lệ".into());
+    }
+
+    let mut launch = Command::new(&dest);
+    if is_setup {
+        // Launch NSIS setup cleanly so Windows upgrades in place.
+        launch.arg("/S");
+    }
+    launch
+        .spawn()
+        .map_err(|e| format!("Không khởi chạy được trình cài đặt cập nhật: {e}"))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+#[cfg(not(windows))]
+pub fn download_and_install_update(url: &str, version: &str) -> Result<String, String> {
+    let _ = validate_installer_url(url)?;
+    let _ = sanitize_version_token(version)?;
+    Err("In-app Windows EXE installer is only available on Windows".into())
 }
 
 /// Parses the JSON payload from `GET /repos/SalyyS1/SLClean/releases/latest`.
@@ -219,5 +291,9 @@ mod tests {
         assert!(validate_release_url("https://github.com/SalyyS1/SLClean/releases/tag/v0.62.0").is_ok());
         assert!(validate_release_url("https://evil.example.com/payload.exe").is_err());
         assert!(validate_release_url("https://github.com/SalyyS1/SLClean/releases&calc.exe").is_err());
+        assert!(validate_installer_url("https://github.com/SalyyS1/SLClean/releases/download/v0.63.0/SLClean_0.63.0_x64-setup.exe").is_ok());
+        assert!(validate_installer_url("https://github.com/SalyyS1/SLClean/releases/tag/v0.63.0").is_err());
+        assert_eq!(sanitize_version_token("v0.63.0").unwrap(), "0.63.0");
+        assert!(sanitize_version_token("0.63.0;calc").is_err());
     }
 }

@@ -579,6 +579,21 @@ fn open_update_url(url: String) -> Result<(), String> {
     updater::open_release_url(&url)
 }
 
+/// Tự động tải trình cài đặt SLClean mới về %TEMP%, khởi chạy cập nhật và đóng bản cũ.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle, url: String, version: String) -> Result<String, String> {
+    let launched = tauri::async_runtime::spawn_blocking(move || {
+        updater::download_and_install_update(&url, &version)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(900));
+        app.exit(0);
+    });
+    Ok(launched)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Some(code) = cli::try_run_from_env() {
@@ -636,7 +651,8 @@ pub fn run() {
             render_digest_html_text,
             render_startup_audit_html_text,
             check_for_updates,
-            open_update_url
+            open_update_url,
+            install_update
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

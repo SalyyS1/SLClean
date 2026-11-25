@@ -379,13 +379,49 @@
     // Keep pills synced if language button is clicked
     document.getElementById("btn-lang")?.addEventListener("click", () => setTimeout(updatePills, 30));
 
-    // Wire GitHub Release update checker controls & silent startup check
+    // Wire GitHub Release in-app auto-updater controls & silent startup check
     document.getElementById("btn-check-update")?.addEventListener("click", () => checkForUpdates(true));
-    document.getElementById("btn-update-download")?.addEventListener("click", () => {
-      if (!latestUpdate) return;
-      const url = latestUpdate.setup_url || latestUpdate.portable_url || latestUpdate.release_url;
-      if (url && window.__TAURI__?.core?.invoke) {
-        window.__TAURI__.core.invoke("open_update_url", { url }).catch(() => {});
+    document.getElementById("btn-update-download")?.addEventListener("click", async () => {
+      if (!latestUpdate || !window.__TAURI__?.core?.invoke) return;
+      const exeUrl = latestUpdate.setup_url || latestUpdate.portable_url;
+      const btn = document.getElementById("btn-update-download");
+      const meta = document.getElementById("update-meta");
+      if (exeUrl) {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = curLang() === "vi" ? "⏳ Đang tự cập nhật…" : "⏳ Updating…";
+        }
+        if (meta) {
+          meta.textContent =
+            curLang() === "vi"
+              ? "Đang tải trình cài đặt trực tiếp trong app…"
+              : "Downloading installer directly inside the app…";
+        }
+        try {
+          await window.__TAURI__.core.invoke("install_update", {
+            url: exeUrl,
+            version: latestUpdate.latest_version,
+          });
+          if (meta) {
+            meta.textContent =
+              curLang() === "vi"
+                ? "✓ Đã tải xong! Đang tự động cài đặt & khởi động lại…"
+                : "✓ Downloaded! Installing & restarting…";
+          }
+          return;
+        } catch (err) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = curLang() === "vi" ? "⚡ Cập nhật ngay" : "⚡ Update Now";
+          }
+          if (typeof toast === "function") {
+            toast(curLang() === "vi" ? `Tự cập nhật lỗi (${err}) — đang mở trang tải…` : `Auto-update failed (${err}) — opening release…`);
+          }
+        }
+      }
+      const fallback = exeUrl || latestUpdate.release_url;
+      if (fallback) {
+        window.__TAURI__.core.invoke("open_update_url", { url: fallback }).catch(() => {});
       }
     });
     document.getElementById("btn-update-open")?.addEventListener("click", () => {
