@@ -432,14 +432,14 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
-            "name": "slclean_export_dupes_html",
-            "description": "Scan directories for byte-identical duplicate AI weights (.safetensors, .gguf, .bin) and large blobs and render a self-contained dark-mode HTML Duplicate Blob Report (read-only).",
+            "name": "slclean_export_big_files_html",
+            "description": "Scan directories for large files above min_mb and render a self-contained dark-mode HTML Large File Consumers Report (read-only).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "roots": { "type": "array", "items": { "type": "string" } },
-                    "min_mb": { "type": "number", "minimum": 0.001, "default": 10.0 },
-                    "trust_cas_names": { "type": "boolean", "default": true }
+                    "min_mb": { "type": "number", "minimum": 0.001, "default": 50.0 },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
                 },
                 "required": ["roots"],
                 "additionalProperties": false
@@ -1174,7 +1174,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
-        "slclean_export_dupes_html" => {
+        "slclean_export_big_files_html" => {
             let roots: Vec<PathBuf> = args
                 .and_then(|a| a.get("roots"))
                 .and_then(|v| v.as_array())
@@ -1183,17 +1183,37 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             if roots.is_empty() {
                 return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
             }
-            let min_mb = args.and_then(|a| a.get("min_mb")).and_then(|v| v.as_f64()).unwrap_or(10.0).max(0.001);
+            let min_mb = args.and_then(|a| a.get("min_mb")).and_then(|v| v.as_f64()).unwrap_or(50.0).max(0.001);
+            let limit = args.and_then(|a| a.get("limit")).and_then(|v| v.as_u64()).unwrap_or(50).clamp(1, 200) as usize;
             let min_bytes = (min_mb * 1024.0 * 1024.0).round() as u64;
-            let trust_cas = args.and_then(|a| a.get("trust_cas_names")).and_then(|v| v.as_bool()).unwrap_or(true);
             let cancel = AtomicBool::new(false);
-            let rep = blob_dupes::scan_blobs(&roots, min_bytes, trust_cas, &cancel);
-            let html = blob_dupes::render_dupes_html(&rep);
+            let mut scan = big_files::scan(&roots, &[], min_bytes, &cancel, |_| {}, |_| {});
+            let matched = scan.files.len();
+            let total_bytes: u64 = scan.files.iter().map(|f| f.bytes).sum();
+            scan.files.truncate(limit);
+            let mut rows = String::new();
+            for f in &scan.files {
+                let p = f.path.to_string_lossy().replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                rows.push_str(&format!(
+                    "<tr><td><code>{}</code></td><td style=\"text-align:right\">{:.2} MiB</td></tr>\n",
+                    p, f.bytes as f64 / (1024.0 * 1024.0)
+                ));
+            }
+            if rows.is_empty() {
+                rows.push_str("<tr><td colspan=\"2\" style=\"color:#93a89b\">No files matched the minimum size threshold.</td></tr>");
+            }
+            let html = format!(
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean Large Files Report</title><style>body{{margin:0;padding:28px;background:#101512;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:980px;margin:0 auto}}table{{width:100%;border-collapse:collapse;background:#161d19;border:1px solid #2a3730}}th,td{{padding:8px 10px;border-bottom:1px solid #2a3730;font-size:13px;text-align:left}}th{{color:#93a89b;font-size:11px;text-transform:uppercase}}</style></head><body><div class=\"wrap\"><h1>SLClean Large File Consumers Report</h1><p>Matched: <b>{}</b> file(s) &middot; Total: <b>{:.2} MiB</b> (threshold {:.2} MiB)</p><table><thead><tr><th>Path</th><th style=\"text-align:right\">Size</th></tr></thead><tbody>{}</tbody></table></div></body></html>",
+                matched,
+                total_bytes as f64 / (1024.0 * 1024.0),
+                min_mb,
+                rows
+            );
             tool_outcome(
                 id,
                 json!({
-                    "group_count": rep.groups.len(),
-                    "total_wasted_bytes": rep.total_wasted_bytes,
+                    "matched_files": matched,
+                    "total_bytes": total_bytes,
                     "html_bytes": html.len(),
                     "html": html,
                 }),
@@ -1314,7 +1334,10 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 32);
+        let arr = tools["result"]["tools"].as_array().unwrap();
+        assert_eq!(arr.len(), 32);
+        let unique_names: std::collections::HashSet<&str> = arr.iter().filter_map(|t| t["name"].as_str()).collect();
+        assert_eq!(unique_names.len(), arr.len(), "MCP tool names must be strictly unique");
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",
