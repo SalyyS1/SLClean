@@ -202,6 +202,7 @@
       { id: "theme", icon: "❄", label: vi ? "Đổi giao diện (Rem Aqua / Rem Twilight / Glacier)" : "Switch Theme (Rem Aqua / Rem Twilight / Glacier)", hint: currentTheme, run: () => applyTheme(THEMES[(THEMES.indexOf(currentTheme) + 1) % THEMES.length]) },
       { id: "fx", icon: "✨", label: vi ? "Chỉnh hiệu ứng nền động Anime (Nhẹ / Mơ màng / Tắt)" : "Cycle Anime Ambient FX (Calm / Dreamy / Off)", hint: currentFx, run: () => applyFx(FX_MODES[(FX_MODES.indexOf(currentFx) + 1) % FX_MODES.length]) },
       { id: "density", icon: "☰", label: vi ? "Đổi mật độ hàng (Thoải mái / Gọn nhẹ)" : "Toggle Row Density (Comfortable / Compact)", hint: currentDensity, run: () => applyDensity(currentDensity === "compact" ? "comfortable" : "compact") },
+      { id: "check-update", icon: "⬇", label: vi ? "Kiểm tra bản cập nhật mới từ GitHub Releases" : "Check for New Updates from GitHub Releases", hint: "GitHub", run: () => checkForUpdates(true) },
       { id: "shortcuts", icon: "⌨", label: vi ? "Xem bảng phím tắt nhanh" : "Show Keyboard Shortcuts Cheatsheet", hint: "?", run: () => document.getElementById("shortcuts-dialog")?.showModal() },
       { id: "export", icon: "📄", label: vi ? "Xuất báo cáo kiểm toán HTML" : "Export HTML Audit Report", hint: "HTML", run: () => document.getElementById("btn-export-html")?.click() },
     ];
@@ -241,6 +242,58 @@
       li.addEventListener("click", exec);
       li.addEventListener("keydown", (e) => { if (e.key === "Enter") exec(); });
       list.appendChild(li);
+    }
+  }
+
+  // --- In-App GitHub Release Update Checker ---
+  let latestUpdate = null;
+
+  async function checkForUpdates(manual) {
+    const tauriInvoke = window.__TAURI__?.core?.invoke;
+    if (!tauriInvoke) return;
+    const btn = document.getElementById("btn-check-update");
+    if (btn && manual) btn.disabled = true;
+    try {
+      if (manual && typeof toast === "function") {
+        toast(curLang() === "vi" ? "Đang kiểm tra bản cập nhật trên GitHub…" : "Checking GitHub Releases for updates…");
+      }
+      const info = await tauriInvoke("check_for_updates");
+      latestUpdate = info;
+      const banner = document.getElementById("update-banner");
+      if (info && info.update_available) {
+        const dismissed = localStorage.getItem("slclean-dismissed-update");
+        if (!manual && dismissed === info.latest_version) return;
+        const badge = document.getElementById("update-badge");
+        const title = document.getElementById("update-title");
+        const meta = document.getElementById("update-meta");
+        if (badge) badge.textContent = `v${info.latest_version}`;
+        if (title) {
+          title.textContent =
+            curLang() === "vi"
+              ? `Có bản cập nhật mới SLClean v${info.latest_version}`
+              : `New SLClean v${info.latest_version} available`;
+        }
+        if (meta) {
+          meta.textContent =
+            curLang() === "vi"
+              ? `(hiện tại v${info.current_version}) — đã phát hành trên GitHub`
+              : `(current v${info.current_version}) — published on GitHub`;
+        }
+        if (banner) banner.hidden = false;
+      } else if (manual && typeof toast === "function") {
+        const cur = info?.current_version || "";
+        toast(
+          curLang() === "vi"
+            ? `✓ SLClean v${cur} đang là bản mới nhất!`
+            : `✓ SLClean v${cur} is up to date!`
+        );
+      }
+    } catch (err) {
+      if (manual && typeof toast === "function") {
+        toast(curLang() === "vi" ? `Không kiểm tra được cập nhật: ${err}` : `Update check failed: ${err}`);
+      }
+    } finally {
+      if (btn && manual) btn.disabled = false;
     }
   }
 
@@ -325,6 +378,29 @@
 
     // Keep pills synced if language button is clicked
     document.getElementById("btn-lang")?.addEventListener("click", () => setTimeout(updatePills, 30));
+
+    // Wire GitHub Release update checker controls & silent startup check
+    document.getElementById("btn-check-update")?.addEventListener("click", () => checkForUpdates(true));
+    document.getElementById("btn-update-download")?.addEventListener("click", () => {
+      if (!latestUpdate) return;
+      const url = latestUpdate.setup_url || latestUpdate.portable_url || latestUpdate.release_url;
+      if (url && window.__TAURI__?.core?.invoke) {
+        window.__TAURI__.core.invoke("open_update_url", { url }).catch(() => {});
+      }
+    });
+    document.getElementById("btn-update-open")?.addEventListener("click", () => {
+      if (latestUpdate?.release_url && window.__TAURI__?.core?.invoke) {
+        window.__TAURI__.core.invoke("open_update_url", { url: latestUpdate.release_url }).catch(() => {});
+      }
+    });
+    document.getElementById("btn-update-dismiss")?.addEventListener("click", () => {
+      const banner = document.getElementById("update-banner");
+      if (banner) banner.hidden = true;
+      if (latestUpdate?.latest_version) {
+        localStorage.setItem("slclean-dismissed-update", latestUpdate.latest_version);
+      }
+    });
+    setTimeout(() => checkForUpdates(false), 2500);
   }
 
   if (document.readyState === "loading") {

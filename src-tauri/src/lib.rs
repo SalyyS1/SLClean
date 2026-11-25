@@ -45,6 +45,7 @@ mod sizer;
 #[cfg(windows)]
 mod startup;
 pub mod startup_audit;
+pub mod updater;
 #[cfg(windows)]
 mod store_apps;
 #[cfg(windows)]
@@ -564,6 +565,20 @@ async fn pick_folder(app: AppHandle, title: String) -> Result<Option<PathBuf>, S
     .map_err(|e| e.to_string())
 }
 
+/// Kiểm tra bản phát hành mới nhất trên GitHub Releases (SalyyS1/SLClean).
+#[tauri::command]
+async fn check_for_updates() -> Result<updater::UpdateInfo, String> {
+    tauri::async_runtime::spawn_blocking(updater::check_latest_release)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Mở trang phát hành / link tải bản cập nhật SLClean trong trình duyệt mặc định.
+#[tauri::command]
+fn open_update_url(url: String) -> Result<(), String> {
+    updater::open_release_url(&url)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Some(code) = cli::try_run_from_env() {
@@ -619,7 +634,9 @@ pub fn run() {
             scan_ai_junk,
             export_audit_report,
             render_digest_html_text,
-            render_startup_audit_html_text
+            render_startup_audit_html_text,
+            check_for_updates,
+            open_update_url
         ])
         .run(tauri::generate_context!())
         .expect("không khởi động được SLClean");

@@ -97,7 +97,40 @@
 }
 
 .pane {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
 }
+
+/* Thông báo bản cập nhật mới từ GitHub Releases (Rem Aqua glass banner) */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 6px 26px 0;
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(95, 212, 244, 0.36);
+  background: linear-gradient(135deg, rgba(95, 212, 244, 0.14), rgba(244, 143, 177, 0.10));
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 20px rgba(4, 11, 20, 0.28);
+  font-size: 12.5px;
+}
+.update-banner[hidden] { display: none; }
+.update-banner__text { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.update-banner__badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--rem-pink-tint, rgba(244, 143, 177, 0.2));
+  color: var(--rem-pink, #f48fb1);
+  border: 1px solid rgba(244, 143, 177, 0.4);
+}
+.update-banner__meta { color: var(--dust); font-size: 12px; }
+.update-banner__actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
