@@ -363,7 +363,7 @@ function downloadBlob(filename, mime, content) {
 }
 
 async function exportAuditReport(format) {
-  const fmt = format === "csv" ? "csv" : "html";
+  const fmt = format === "csv" ? "csv" : (format === "json" ? "json" : "html");
   const rows = [...items.values()]
     .filter((i) => !i.gone && i.bytes > 0 && i.group !== "bigfile" && i.group !== "dupe")
     .sort((a, b) => b.bytes - a.bytes);
@@ -374,6 +374,22 @@ async function exportAuditReport(format) {
       lines.push([it.id, it.group, it.safety, it.bytes, it.files || 0, L(it.label), it.path].map(csvEscape).join(","));
     }
     downloadBlob("slclean-audit-report.csv", "text/csv;charset=utf-8", lines.join("\n"));
+  } else if (fmt === "json") {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      total_reclaimable_bytes: rows.reduce((s, i) => s + i.bytes, 0),
+      item_count: rows.length,
+      items: rows.map((it) => ({
+        id: it.id,
+        label: L(it.label),
+        group: it.group,
+        safety: it.safety,
+        bytes: it.bytes,
+        files: it.files || 0,
+        path: it.path,
+      })),
+    };
+    downloadBlob("slclean-audit-report.json", "application/json;charset=utf-8", JSON.stringify(payload, null, 2));
   } else {
     const total = rows.reduce((s, i) => s + i.bytes, 0);
     const trs = rows.map((it) => `<tr><td>${esc(L(it.label))}</td><td>${esc(it.group)}</td><td>${esc(it.safety)}</td><td style="text-align:right;font-family:monospace">${fmtBytes(it.bytes)}</td><td style="font-family:monospace">${esc(it.path)}</td></tr>`).join("");
@@ -456,6 +472,7 @@ for (const b of document.querySelectorAll("[data-view]")) {
 }
 if ($("#btn-export-html")) $("#btn-export-html").addEventListener("click", () => exportAuditReport("html"));
 if ($("#btn-export-csv")) $("#btn-export-csv").addEventListener("click", () => exportAuditReport("csv"));
+if ($("#btn-export-json")) $("#btn-export-json").addEventListener("click", () => exportAuditReport("json"));
 if ($("#rail-health-pill")) {
   $("#rail-health-pill").addEventListener("click", exportDriveHealthDigest);
   $("#rail-health-pill").addEventListener("keydown", (e) => {

@@ -453,6 +453,24 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_settings_html",
+            "description": "Inspect active SLClean settings (language, Recycle Bin default, Simple Mode, free-space budget, extra/excluded path health) and render a self-contained dark-mode HTML Settings Audit Report (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_history_html",
+            "description": "Render SLClean's persistent scan snapshot timeline (free space and tracked cache totals over time) as a self-contained dark-mode HTML Storage History Report (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_drives_badge",
+            "description": "Inspect fixed local drives and emit a shields.io Endpoint Badge JSON summarizing total free GiB and minimum free percentage across mounted volumes (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -1255,6 +1273,128 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_settings_html" => {
+            let s = settings::load_offline();
+            let audit = settings::audit_settings(&s);
+            let status_color = if audit.healthy { "#3ecf8e" } else { "#f59e0b" };
+            let status_label = if audit.healthy { "HEALTHY" } else { "NEEDS ATTENTION" };
+            let mut issue_rows = String::new();
+            for p in &audit.missing_extra_roots {
+                let esc = p.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                issue_rows.push_str(&format!("<tr><td>Missing extra root</td><td><code>{}</code></td></tr>\n", esc));
+            }
+            for p in &audit.missing_excluded_roots {
+                let esc = p.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                issue_rows.push_str(&format!("<tr><td>Missing excluded root</td><td><code>{}</code></td></tr>\n", esc));
+            }
+            for p in &audit.redundant_exclusions {
+                let esc = p.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                issue_rows.push_str(&format!("<tr><td>Redundant exclusion</td><td><code>{}</code></td></tr>\n", esc));
+            }
+            if issue_rows.is_empty() {
+                issue_rows.push_str("<tr><td colspan=\"2\" style=\"color:#3ecf8e\">All configured extra roots and exclusion rules are valid.</td></tr>");
+            }
+            let budget_str = audit
+                .free_space_budget_gb
+                .map(|g| format!("{} GB", g))
+                .unwrap_or_else(|| "Not set".into());
+            let html = format!(
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean Settings Audit</title><style>body{{margin:0;padding:28px;background:#101512;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:920px;margin:0 auto}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:8px;padding:12px}}table{{width:100%;border-collapse:collapse;background:#161d19;border:1px solid #2a3730}}th,td{{padding:8px 10px;border-bottom:1px solid #2a3730;font-size:13px;text-align:left}}th{{color:#93a89b;font-size:11px;text-transform:uppercase}}</style></head><body><div class=\"wrap\"><h1>SLClean Settings &amp; Path Exclusion Audit</h1><p>Status: <b style=\"color:{}\">{}</b></p><div class=\"cards\"><div class=\"card\"><div>Language</div><strong>{}</strong></div><div class=\"card\"><div>Delete Mode</div><strong>{}</strong></div><div class=\"card\"><div>Simple Mode</div><strong>{}</strong></div><div class=\"card\"><div>Free-Space Budget</div><strong>{}</strong></div><div class=\"card\"><div>Extra / Excluded Roots</div><strong>{} / {}</strong></div></div><table><thead><tr><th>Check</th><th>Path / Detail</th></tr></thead><tbody>{}</tbody></table></div></body></html>",
+                status_color,
+                status_label,
+                audit.effective_language,
+                if audit.to_trash_default { "Recycle Bin" } else { "Permanent" },
+                if audit.simple_mode { "Enabled" } else { "Standard" },
+                budget_str,
+                audit.extra_root_count,
+                audit.excluded_root_count,
+                issue_rows
+            );
+            tool_outcome(
+                id,
+                json!({
+                    "healthy": audit.healthy,
+                    "effective_language": audit.effective_language,
+                    "extra_root_count": audit.extra_root_count,
+                    "excluded_root_count": audit.excluded_root_count,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
+        "slclean_export_history_html" => {
+            let h = history::load_default();
+            let list = history::list(&h);
+            let mut rows = String::new();
+            for snap in list.iter().rev().take(30) {
+                let drives_str = snap
+                    .drives
+                    .iter()
+                    .map(|d| format!("{} {:.1}/{:.1} GiB", d.mount, d.free as f64 / 1073741824.0, d.total as f64 / 1073741824.0))
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                let esc_d = drives_str.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                rows.push_str(&format!(
+                    "<tr><td>{}</td><td style=\"text-align:right\">{}</td><td style=\"text-align:right\">{:.2} MiB</td><td>{}</td></tr>\n",
+                    snap.at,
+                    snap.items,
+                    snap.bytes as f64 / (1024.0 * 1024.0),
+                    esc_d
+                ));
+            }
+            if rows.is_empty() {
+                rows.push_str("<tr><td colspan=\"4\" style=\"color:#93a89b\">No scan snapshots recorded in history.json yet.</td></tr>");
+            }
+            let html = format!(
+                "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>SLClean Storage Snapshot History</title><style>body{{margin:0;padding:28px;background:#101512;color:#e6efe9;font-family:system-ui,sans-serif}}.wrap{{max-width:980px;margin:0 auto}}table{{width:100%;border-collapse:collapse;background:#161d19;border:1px solid #2a3730}}th,td{{padding:8px 10px;border-bottom:1px solid #2a3730;font-size:13px;text-align:left}}th{{color:#93a89b;font-size:11px;text-transform:uppercase}}</style></head><body><div class=\"wrap\"><h1>SLClean Storage Snapshot History</h1><p>Recorded snapshots: <b>{}</b> (showing up to 30 most recent)</p><table><thead><tr><th>Epoch Timestamp</th><th style=\"text-align:right\">Tracked Items</th><th style=\"text-align:right\">Tracked Cache Size</th><th>Drive Free Space</th></tr></thead><tbody>{}</tbody></table></div></body></html>",
+                list.len(),
+                rows
+            );
+            tool_outcome(
+                id,
+                json!({
+                    "snapshot_count": list.len(),
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
+        "slclean_export_drives_badge" => {
+            let list = drives::list_drives();
+            let total_free: u64 = list.iter().map(|d| d.free).sum();
+            let total_cap: u64 = list.iter().map(|d| d.total).sum();
+            let min_pct = list
+                .iter()
+                .filter(|d| d.total > 0)
+                .map(|d| (d.free as f64 / d.total as f64) * 100.0)
+                .fold(100.0_f64, f64::min);
+            let free_gib = total_free as f64 / 1073741824.0;
+            let color = if min_pct < 5.0 {
+                "red"
+            } else if min_pct < 15.0 {
+                "yellow"
+            } else {
+                "brightgreen"
+            };
+            tool_outcome(
+                id,
+                json!({
+                    "drive_count": list.len(),
+                    "total_free_bytes": total_free,
+                    "total_capacity_bytes": total_cap,
+                    "min_free_percent": (min_pct * 10.0).round() / 10.0,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean drives",
+                        "message": format!("{:.1} GiB free ({} vol, min {:.1}%)", free_gib, list.len(), min_pct),
+                        "color": color,
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1335,7 +1475,7 @@ mod tests {
         )
         .unwrap();
         let arr = tools["result"]["tools"].as_array().unwrap();
-        assert_eq!(arr.len(), 32);
+        assert_eq!(arr.len(), 35);
         let unique_names: std::collections::HashSet<&str> = arr.iter().filter_map(|t| t["name"].as_str()).collect();
         assert_eq!(unique_names.len(), arr.len(), "MCP tool names must be strictly unique");
 
@@ -1444,6 +1584,39 @@ mod tests {
         assert_eq!(led_html_resp["result"]["isError"], false);
         let led_html_payload: Value = serde_json::from_str(led_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
         assert!(led_html_payload["html"].as_str().unwrap().contains("Clean Run Ledger Audit Trail"));
+
+        let set_html_call = json!({
+            "jsonrpc": "2.0",
+            "id": 33,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_settings_html", "arguments": {} }
+        });
+        let set_html_resp: Value = serde_json::from_str(&handle_message(&set_html_call.to_string()).unwrap()).unwrap();
+        assert_eq!(set_html_resp["result"]["isError"], false);
+        let set_html_payload: Value = serde_json::from_str(set_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(set_html_payload["html"].as_str().unwrap().contains("Settings &amp; Path Exclusion Audit"));
+
+        let hist_html_call = json!({
+            "jsonrpc": "2.0",
+            "id": 34,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_history_html", "arguments": {} }
+        });
+        let hist_html_resp: Value = serde_json::from_str(&handle_message(&hist_html_call.to_string()).unwrap()).unwrap();
+        assert_eq!(hist_html_resp["result"]["isError"], false);
+        let hist_html_payload: Value = serde_json::from_str(hist_html_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert!(hist_html_payload["html"].as_str().unwrap().contains("Storage Snapshot History"));
+
+        let drv_badge_call = json!({
+            "jsonrpc": "2.0",
+            "id": 35,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_drives_badge", "arguments": {} }
+        });
+        let drv_badge_resp: Value = serde_json::from_str(&handle_message(&drv_badge_call.to_string()).unwrap()).unwrap();
+        assert_eq!(drv_badge_resp["result"]["isError"], false);
+        let drv_badge_payload: Value = serde_json::from_str(drv_badge_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(drv_badge_payload["badge"]["label"], "slclean drives");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
