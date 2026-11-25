@@ -1,3 +1,4 @@
+#![cfg_attr(not(windows), allow(dead_code))]
 //! Nhật ký dung lượng: sau mỗi lần quét trọn vẹn, ghi lại một "mốc" gồm dung lượng trống của
 //! từng ổ và cỡ của từng mục quét được. So hai mốc cho biết cái gì đã ăn ổ đĩa từ lần trước.
 //! Ý này không mới (DiskBrain, SpaceRover, SizeTrend và `dfp.exe` của Windows đều so được hai

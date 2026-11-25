@@ -1,3 +1,4 @@
+#![cfg_attr(not(windows), allow(dead_code))]
 //! Tìm file giống hệt nhau (từng byte) để người dùng tự chọn bản nào bỏ. Ba pha lọc để hash
 //! ít nhất có thể: gom theo cỡ → băm 4 KB đầu → băm toàn file. File chỉ có một mình ở cỡ của
 //! nó thì không bao giờ bị đọc.

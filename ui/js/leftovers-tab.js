@@ -283,4 +283,7 @@ $("#left-search").addEventListener("input", (e) => {
 });
 $("#left-search").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.target.value = ""; leftQuery = ""; renderAll(); } });
 
-onTabFirstShow("leftovers", scanLeftovers);
+onTabFirstShow("leftovers", () => {
+  scanLeftovers();
+  scanAiJunk();
+});

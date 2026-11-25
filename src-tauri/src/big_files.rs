@@ -1,3 +1,4 @@
+#![cfg_attr(not(windows), allow(dead_code))]
 //! File đơn lẻ lớn và bản đồ thư mục. Sổ cái chỉ đo được cả thư mục cache, nên một file 4 GB
 //! nằm lẻ trong Downloads không bao giờ lộ ra. Một lần đi cây trả cả hai: danh sách file ≥
 //! ngưỡng, và tổng dung lượng theo từng thư mục ở vài cấp đầu để lần ra chỗ chứa.
