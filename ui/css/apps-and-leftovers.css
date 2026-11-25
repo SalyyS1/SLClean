@@ -93,19 +93,22 @@
 /* Hàng thư mục thừa: cột "lần mở" tận dụng chỗ của tuổi. */
 .row__age--used { color: var(--amber); }
 
-/* Dải tóm tắt quyết định AI / Codex / Leftovers (4 thẻ bấm lọc nhanh) */
+/* Dải tóm tắt quyết định AI / Codex / Leftovers (4 thẻ bấm lọc nhanh gọn gàng) */
 .decision-banner {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px 30px 4px;
+  gap: 8px;
+  padding: 6px 22px 4px;
+  flex-shrink: 0;
 }
 .decision-tile {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
   text-align: left;
-  padding: 11px 14px;
-  border-radius: var(--radius);
+  padding: 7px 11px;
+  border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--moss-2);
   backdrop-filter: blur(12px);
@@ -114,10 +117,10 @@
   transition: border-color 140ms, transform 140ms, background-color 140ms;
 }
 .decision-tile:hover { transform: translateY(-1px); border-color: rgba(95, 212, 244, 0.45); background: var(--moss-3); }
-.decision-tile.is-active { box-shadow: 0 0 0 1px var(--amber), 0 6px 18px rgba(56, 189, 248, 0.14); border-color: var(--amber); }
-.decision-tile__label { font-size: 11.5px; color: var(--dust); display: flex; align-items: center; gap: 6px; font-weight: 500; }
-.decision-tile__val { font-family: var(--font-mono); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.decision-tile__meta { font-size: 11.5px; color: var(--dust-dim); }
+.decision-tile.is-active { box-shadow: 0 0 0 1px var(--amber), 0 4px 14px rgba(56, 189, 248, 0.14); border-color: var(--amber); }
+.decision-tile__label { font-size: 11px; color: var(--dust); display: flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap; }
+.decision-tile__val { font-family: var(--font-mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.decision-tile__meta { font-size: 10.5px; color: var(--dust-dim); white-space: nowrap; }
 .decision-tile--safe .decision-tile__val { color: var(--sage); }
 .decision-tile--docs .decision-tile__val { color: var(--pink); }
 .decision-tile--review .decision-tile__val { color: var(--warn); }

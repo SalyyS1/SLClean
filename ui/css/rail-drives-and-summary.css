@@ -3,8 +3,8 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px 14px;
+  gap: 8px;
+  padding: 12px 14px 10px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
@@ -17,23 +17,23 @@
 .rail__brand {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  column-gap: 11px;
+  column-gap: 9px;
   align-items: center;
 }
 .rail__crest {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, rgba(95, 212, 244, 0.24), rgba(244, 143, 177, 0.22));
   border: 1px solid var(--line);
-  box-shadow: 0 6px 18px rgba(95, 212, 244, 0.18);
+  box-shadow: 0 4px 14px rgba(95, 212, 244, 0.16);
 }
-.rail__crest svg { width: 24px; height: 24px; }
+.rail__crest svg { width: 20px; height: 20px; }
 .rail__title {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -44,14 +44,14 @@
 .rail__tag {
   grid-column: 2 / 4;
   color: var(--dust);
-  font-size: 11.5px;
-  margin-top: 3px;
+  font-size: 11px;
+  margin-top: 1px;
 }
 
 /* Rem Aqua Theme + Anime FX Quick Pills */
 .rail__pills {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 .rail__pill {
@@ -59,14 +59,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 5px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--moss-2);
   color: var(--bone-dim);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
+  white-space: nowrap;
   transition: border-color 140ms, background-color 140ms, color 140ms;
 }
 .rail__pill:hover {
@@ -80,24 +81,24 @@
 }
 
 /* --- Drives --- */
-.drives__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.drives__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .drive {
   display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  gap: 4px;
+  padding: 7px 10px;
+  border-radius: 10px;
   background: var(--moss-2);
   border: 1px solid var(--line-soft);
 }
-.drive__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.drive__mount { font-family: var(--font-display); font-weight: 600; font-size: 14px; white-space: nowrap; }
-.drive__name { color: var(--dust-dim); font-size: 11.5px; margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9ch; display: inline-block; vertical-align: bottom; }
-.drive__free { font-family: var(--font-mono); font-size: 11.5px; color: var(--dust); white-space: nowrap; }
+.drive__head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.drive__mount { font-family: var(--font-display); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.drive__name { color: var(--dust-dim); font-size: 11px; margin-left: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9ch; display: inline-block; vertical-align: bottom; }
+.drive__free { font-family: var(--font-mono); font-size: 11px; color: var(--dust); white-space: nowrap; }
 .drive__free b { color: var(--bone); font-weight: 600; }
 
 .drive__bar {
   position: relative;
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: var(--moss-3);
   overflow: hidden;
@@ -122,9 +123,9 @@
 
 /* --- Selected & Found Tally Cards --- */
 .tally {
-  padding: 13px 15px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   background: linear-gradient(145deg, rgba(95, 212, 244, 0.14), rgba(244, 143, 177, 0.05));
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
@@ -132,25 +133,25 @@
   background: var(--moss-2);
   border-style: dashed;
 }
-.tally__label { font-size: 11px; color: var(--dust); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
+.tally__label { font-size: 10px; color: var(--dust); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
 .tally__value {
   font-family: var(--font-mono);
-  font-size: 27px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--amber);
-  line-height: 1.18;
-  margin-top: 3px;
+  line-height: 1.15;
+  margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
-.tally__value--dim { color: var(--bone-dim); font-size: 20px; }
-.tally__meta { font-size: 11.5px; color: var(--dust); margin-top: 2px; }
+.tally__value--dim { color: var(--bone-dim); font-size: 17px; }
+.tally__meta { font-size: 11px; color: var(--dust); margin-top: 1px; }
 
-.rail__actions { display: grid; gap: 12px; margin-top: auto; }
+.rail__actions { display: grid; gap: 8px; margin-top: auto; }
 
-.mode { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: pointer; font-size: 12.5px; }
+.mode { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; cursor: pointer; font-size: 12px; }
 .mode input { position: absolute; opacity: 0; width: 0; height: 0; }
 .mode__box {
-  width: 17px; height: 17px; margin-top: 1px;
+  width: 16px; height: 16px; margin-top: 1px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--moss-2);
@@ -159,15 +160,15 @@
 }
 .mode input:checked + .mode__box { background: var(--sage); border-color: var(--sage); }
 .mode input:checked + .mode__box::after {
-  content: ""; position: absolute; left: 5px; top: 2px; width: 5px; height: 9px;
+  content: ""; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
   border: solid #06131c; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 .mode input:focus-visible + .mode__box { outline: 2px solid var(--amber); outline-offset: 2px; }
-.mode__text small { display: block; color: var(--dust-dim); font-size: 11px; margin-top: 2px; }
+.mode__text small { display: block; color: var(--dust-dim); font-size: 10.5px; margin-top: 1px; line-height: 1.3; }
 
-.rail__foot { display: flex; flex-direction: column; align-items: stretch; gap: 3px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
-.rail__foot .btn { font-size: 12px; justify-content: flex-start; padding: 6px 10px; white-space: nowrap; }
+.rail__foot { display: flex; flex-direction: column; align-items: stretch; gap: 2px; border-top: 1px solid var(--line-soft); padding-top: 6px; }
+.rail__foot .btn { font-size: 11.5px; justify-content: flex-start; padding: 5px 8px; white-space: nowrap; gap: 7px; }
+.rail__foot .btn svg { width: 14px; height: 14px; flex: 0 0 14px; }
 #btn-admin { color: var(--warn); }
 #btn-admin:hover { color: var(--warn); background: var(--warn-tint); }
-#btn-admin svg { width: 13px; height: 13px; }
-.rail__admin-note { font-size: 11.5px; color: var(--sage); padding: 2px 10px; }
+.rail__admin-note { font-size: 11px; color: var(--sage); padding: 2px 8px; }
