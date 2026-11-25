@@ -90,6 +90,58 @@ pub struct BlobDupReport {
     pub groups: Vec<BlobDupGroup>,
 }
 
+fn dup_html_esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// Render a self-contained dark-mode HTML Duplicate AI Model & Build Blob Report (`--scan-dupes --report-html`).
+pub fn render_dupes_html(rep: &BlobDupReport) -> String {
+    let mut rows = String::new();
+    for g in &rep.groups {
+        let mb = g.wasted_bytes as f64 / (1024.0 * 1024.0);
+        let paths = g
+            .locations
+            .iter()
+            .map(|l| format!("<code>{}</code>", dup_html_esc(&l.path.to_string_lossy())))
+            .collect::<Vec<_>>()
+            .join("<br>");
+        rows.push_str(&format!(
+            "<tr><td><code>{}</code></td><td>{}</td><td>{:.2} MiB</td><td>{}</td><td>{}</td></tr>\n",
+            dup_html_esc(&g.sha256.chars().take(12).collect::<String>()),
+            g.locations.len(),
+            mb,
+            dup_html_esc(&g.ecosystems.join(", ")),
+            paths
+        ));
+    }
+    if rows.is_empty() {
+        rows.push_str("<tr><td colspan=\"5\" style=\"color:#4ade80\"><b>PASS &mdash; Zero byte-identical duplicate blobs found.</b></td></tr>");
+    }
+    let total_mb = rep.total_wasted_bytes as f64 / (1024.0 * 1024.0);
+    format!(
+        r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>SLClean Duplicate Blob Report</title>
+<style>
+body{{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}}
+.wrap{{max-width:1060px;margin:0 auto}}.card{{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}}
+table{{width:100%;border-collapse:collapse;font-size:12.5px}}th,td{{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}}
+th{{color:#93a89b}}code{{font-family:ui-monospace,monospace;color:#4ade80}}
+</style></head><body><div class="wrap">
+<div class="card"><h1>SLClean Content-Addressed Duplicate Blob Report</h1>
+<p>Groups: <b>{}</b> &middot; Wasted Space: <b>{:.2} MiB</b> &middot; Scanned Files: <b>{}</b> &middot; Hardlinks Preserved: <b>{}</b></p></div>
+<div class="card"><table><thead><tr><th>SHA-256</th><th>Copies</th><th>Wasted</th><th>Ecosystems</th><th>Locations</th></tr></thead>
+<tbody>{}</tbody></table></div></div></body></html>"##,
+        rep.groups.len(),
+        total_mb,
+        rep.scanned_files,
+        rep.hardlinks_skipped,
+        rows
+    )
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct PhysicalFileId {
     dev: u64,

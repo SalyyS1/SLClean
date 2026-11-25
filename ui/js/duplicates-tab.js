@@ -201,6 +201,22 @@ function refreshDupesAfterClean() {
 }
 
 $("#btn-dup-scan").addEventListener("click", scanDuplicates);
+if ($("#btn-dup-export-html")) {
+  $("#btn-dup-export-html").addEventListener("click", () => {
+    const activeGroups = dupGroups.filter((g) => dupCounts(g).live > 1);
+    const wasted = activeGroups.reduce((s, g) => s + Number(g.bytes || 0) * Math.max(0, dupCounts(g).live - 1), 0);
+    const tr = activeGroups.slice(0, 150).map((g) => {
+      const livePaths = g.files.filter((f) => { const it = items.get(`dup:${f.path}`); return it && !it.gone; });
+      const pathsHtml = livePaths.map((f) => `<code>${esc(f.path)}</code>`).join("<br>");
+      return `<tr><td>${livePaths.length}</td><td>${esc(fmtBytes(g.bytes || 0))}</td><td>${esc(fmtBytes((g.bytes || 0) * Math.max(0, livePaths.length - 1)))}</td><td>${pathsHtml}</td></tr>`;
+    }).join("\n");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>SLClean Duplicate Files Report</title><style>body{margin:0;padding:28px;background:#0f1411;color:#e6efe9;font-family:system-ui,sans-serif}.wrap{max-width:1040px;margin:0 auto}.card{background:#161d19;border:1px solid #2a3730;border-radius:10px;padding:18px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:8px 10px;border-bottom:1px solid #24302a;text-align:left;vertical-align:top}th{color:#93a89b}code{font-family:ui-monospace,monospace;color:#4ade80}</style></head><body><div class="wrap"><div class="card"><h1>SLClean Byte-Identical Duplicate Files Report</h1><p>Groups: <b>${activeGroups.length}</b> &middot; Reclaimable Waste: <b>${esc(fmtBytes(wasted))}</b></p></div><div class="card"><table><thead><tr><th>Copies</th><th>File Size</th><th>Wasted</th><th>Paths</th></tr></thead><tbody>${tr}</tbody></table></div></div></body></html>`;
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-duplicates-report.html", "text/html;charset=utf-8", html);
+      toast(lang === "vi" ? "Đã xuất slclean-duplicates-report.html" : "Exported slclean-duplicates-report.html");
+    }
+  });
+}
 $("#btn-dup-cancel").addEventListener("click", () => invoke("cancel_scan"));
 $("#dup-min").addEventListener("change", (e) => {
   dupMin = Number(e.target.value);

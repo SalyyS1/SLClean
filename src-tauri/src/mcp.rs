@@ -362,6 +362,20 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_dupes_html",
+            "description": "Scan directories for byte-identical duplicate AI model/build blobs and render a self-contained dark-mode HTML Report (read-only).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "roots": { "type": "array", "items": { "type": "string" } },
+                    "min_dupe_bytes": { "type": "integer", "minimum": 1, "default": 1048576 }
+                },
+                "required": ["roots"],
+                "additionalProperties": false
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -948,6 +962,29 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_dupes_html" => {
+            let roots: Vec<PathBuf> = args
+                .and_then(|a| a.get("roots"))
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(PathBuf::from)).collect())
+                .unwrap_or_default();
+            if roots.is_empty() {
+                return tool_outcome(id, json!({ "error": "'roots' must be a non-empty array of directories." }), true);
+            }
+            let min_dupe_bytes = args.and_then(|a| a.get("min_dupe_bytes")).and_then(|v| v.as_u64()).unwrap_or(1024 * 1024);
+            let scan = blob_dupes::scan_blobs(&roots, min_dupe_bytes, false, &AtomicBool::new(false));
+            let html = blob_dupes::render_dupes_html(&scan);
+            tool_outcome(
+                id,
+                json!({
+                    "duplicate_group_count": scan.groups.len(),
+                    "total_wasted_bytes": scan.total_wasted_bytes,
+                    "html_bytes": html.len(),
+                    "html": html,
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1027,7 +1064,7 @@ mod tests {
             &handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap(),
         )
         .unwrap();
-        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 25);
+        assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 26);
 
         let startup_sarif_call = json!({
             "jsonrpc": "2.0",

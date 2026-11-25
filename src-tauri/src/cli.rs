@@ -88,6 +88,7 @@ pub enum CliCommand {
         trust_cas_names: bool,
         max_reclaimable_gb: Option<f64>,
         sarif: Option<PathBuf>,
+        report_html: Option<PathBuf>,
         badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
@@ -415,6 +416,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             trust_cas_names,
             max_reclaimable_gb,
             sarif: sarif_out,
+            report_html,
             badge_json,
             out,
         })),
@@ -835,6 +837,7 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
             trust_cas_names,
             max_reclaimable_gb,
             sarif,
+            report_html,
             badge_json,
             out,
         } => {
@@ -856,6 +859,9 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 let sarif_doc = sarif::build_dupes_sarif(&scan, budget_gate.as_ref());
                 let sarif_json = serde_json::to_string_pretty(&sarif_doc).map_err(|e| e.to_string())?;
                 write_file_creating_dirs(sarif_path, &sarif_json)?;
+            }
+            if let Some(html_path) = report_html.as_ref() {
+                write_file_creating_dirs(html_path, &blob_dupes::render_dupes_html(&scan))?;
             }
             if let Some(badge_path) = badge_json.as_ref() {
                 let wasted_mb = scan.total_wasted_bytes as f64 / (1024.0 * 1024.0);
@@ -1216,6 +1222,7 @@ mod tests {
                 trust_cas_names: true,
                 max_reclaimable_gb: Some(5.0),
                 sarif: None,
+                report_html: None,
                 badge_json: None,
                 out: None,
             })
@@ -1274,6 +1281,7 @@ mod tests {
             trust_cas_names: false,
             max_reclaimable_gb: Some(1.0),
             sarif: Some(sarif_out.clone()),
+            report_html: None,
             badge_json: Some(badge_out.clone()),
             out: Some(json_out.clone()),
         })
@@ -1290,6 +1298,7 @@ mod tests {
             trust_cas_names: false,
             max_reclaimable_gb: Some(0.0),
             sarif: Some(sarif_out.clone()),
+            report_html: None,
             badge_json: None,
             out: Some(json_out.clone()),
         })
