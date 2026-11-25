@@ -72,6 +72,7 @@ pub enum CliCommand {
         min_bytes: u64,
         limit: usize,
         report_html: Option<PathBuf>,
+        badge_json: Option<PathBuf>,
         out: Option<PathBuf>,
     },
     CheckSettings {
@@ -405,6 +406,7 @@ pub fn parse_args(args: &[String]) -> Result<Option<CliCommand>, String> {
             min_bytes: ext_min_bytes,
             limit: 20,
             report_html,
+            badge_json,
             out,
         })),
         Some("check-settings") => Ok(Some(CliCommand::CheckSettings { out })),
@@ -657,6 +659,7 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             min_bytes,
             limit,
             report_html,
+            badge_json,
             out,
         } => {
             let effective_roots = if roots.is_empty() {
@@ -676,6 +679,19 @@ pub fn execute_command(cmd: CliCommand) -> Result<i32, String> {
             if let Some(html_path) = report_html.as_ref() {
                 let html = big_files::render_extensions_html(&buckets, scan.files.len(), min_bytes);
                 write_file_creating_dirs(html_path, &html)?;
+            }
+            if let Some(badge_path) = badge_json.as_ref() {
+                let total_bytes: u64 = buckets.iter().map(|b| b.bytes).sum();
+                let total_mb = total_bytes as f64 / (1024.0 * 1024.0);
+                let top_ext = buckets.first().map(|b| format!(".{}", b.ext)).unwrap_or_else(|| "none".into());
+                let color = if total_mb >= 10240.0 { "red" } else if total_mb >= 1024.0 { "yellow" } else { "brightgreen" };
+                let badge = serde_json::json!({
+                    "schemaVersion": 1,
+                    "label": "slclean big files",
+                    "message": format!("{:.1} MiB (top {})", total_mb, top_ext),
+                    "color": color,
+                });
+                write_file_creating_dirs(badge_path, &serde_json::to_string_pretty(&badge).map_err(|e| e.to_string())?)?;
             }
             let payload = serde_json::json!({
                 "version": env!("CARGO_PKG_VERSION"),

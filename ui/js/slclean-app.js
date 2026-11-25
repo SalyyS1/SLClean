@@ -72,6 +72,25 @@ async function loadDrives() {
   }
   paintGains();
   updateBudgetAlert();
+  updateRailHealthPill();
+}
+
+function updateRailHealthPill() {
+  const pill = $("#rail-health-pill");
+  if (!pill || !drives.length) return;
+  let minFreePct = 100;
+  for (const d of drives) {
+    if (d.total > 0) {
+      const freePct = (d.free / d.total) * 100;
+      if (freePct < minFreePct) minFreePct = freePct;
+    }
+  }
+  const grade = minFreePct >= 20 ? "A" : minFreePct >= 15 ? "B" : minFreePct >= 10 ? "C" : minFreePct >= 5 ? "D" : "F";
+  const color = grade === "A" || grade === "B" ? "#4ade80" : grade === "C" ? "#fbbf24" : "#f87171";
+  pill.hidden = false;
+  pill.style.color = color;
+  pill.style.borderColor = color;
+  pill.textContent = (lang === "vi" ? "Sức khỏe ổ đĩa: Hạng " : "Disk Health: Grade ") + grade + " (" + minFreePct.toFixed(1) + "% free)";
 }
 
 /** Vạch hổ phách trên thanh ổ đĩa = tổng các mục đã tick nằm trên ổ đó. */

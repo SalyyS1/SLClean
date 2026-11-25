@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
   "name": "io.github.SalyyS1/SLClean",
-  "description": "Local-first Windows disk inspector, AI/dev cache cleaner, Installed Apps HTML Auditor, Squarified Treemap, .git Project Reclaimer (Desktop + HTML + Badge), Duplicate Blob Scanner (Desktop + HTML + SARIF + Badge), Orphan Env Scanner (HTML + SARIF + Badge), Hygiene Scanner (Desktop + HTML + SARIF + Badge), Clean Run Ledger, Startup Boot-Impact Auditor (Desktop + HTML + Badge + SARIF SLC014-SLC015), Extension Analytics (Desktop + HTML), Disk Health Doctor (A-F + HTML Digest + Badge + SARIF SLC011-SLC013), Safe Cleanup Roadmap (HTML), and 28-tool read-only Stdio MCP Server (SLClean --mcp).",
-  "version": "0.49.0",
+  "description": "Local-first Windows disk inspector, live rail Disk Health Grade (A-F), AI/dev cache cleaner, Installed Apps HTML Auditor, Squarified Treemap, .git Project Reclaimer (Desktop + HTML + Badge), Duplicate Blob Scanner (Desktop + HTML + SARIF + Badge), Orphan Env Scanner (HTML + SARIF + Badge), Hygiene Scanner (Desktop + HTML + SARIF + Badge), Clean Run Ledger, Startup Boot-Impact Auditor (Desktop + HTML + Badge + SARIF SLC014-SLC015), Extension Analytics (Desktop + HTML + Badge), Disk Health Doctor (A-F + HTML Digest + Badge + SARIF SLC011-SLC013), Safe Cleanup Roadmap (HTML), and 29-tool read-only Stdio MCP Server (SLClean --mcp).",
+  "version": "0.50.0",
   "repository": {
     "url": "https://github.com/SalyyS1/SLClean",
     "source": "github"
