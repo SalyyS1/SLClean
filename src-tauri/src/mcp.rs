@@ -511,6 +511,18 @@ fn tool_definitions() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "slclean_export_history_badge",
+            "description": "Summarize SLClean's recorded storage snapshot history count and latest tracked cache footprint as a shields.io Endpoint Badge JSON (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "slclean_export_rules_badge",
+            "description": "Emit a shields.io Endpoint Badge JSON summarizing SLClean's built-in cache catalog specs and 15 OASIS SARIF v2.1.0 rules (SLC001-SLC015) (read-only).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "slclean_list_rules",
             "description": "List SLClean's built-in cache catalog specs and OASIS SARIF v2.1.0 rules (SLC001-SLC015).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
@@ -1511,6 +1523,45 @@ code{{font-family:ui-monospace,monospace;background:#1c2520;padding:3px 6px;bord
                 false,
             )
         }
+        "slclean_export_history_badge" => {
+            let h = history::load_default();
+            let list = history::list(&h);
+            let latest_mb = list
+                .last()
+                .map(|s| s.bytes as f64 / (1024.0 * 1024.0))
+                .unwrap_or(0.0);
+            tool_outcome(
+                id,
+                json!({
+                    "snapshot_count": list.len(),
+                    "latest_tracked_bytes": list.last().map(|s| s.bytes).unwrap_or(0),
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean history",
+                        "message": format!("{} snapshot(s) · {:.1} MiB latest", list.len(), latest_mb),
+                        "color": if list.is_empty() { "blue" } else { "brightgreen" },
+                    }
+                }),
+                false,
+            )
+        }
+        "slclean_export_rules_badge" => {
+            let specs = catalog_specs::spec_metadata();
+            tool_outcome(
+                id,
+                json!({
+                    "catalog_spec_count": specs.len(),
+                    "sarif_rule_count": 15,
+                    "badge": {
+                        "schemaVersion": 1,
+                        "label": "slclean rules",
+                        "message": format!("{} specs · 15 SARIF rules", specs.len()),
+                        "color": "brightgreen",
+                    }
+                }),
+                false,
+            )
+        }
         "slclean_list_rules" => {
             let specs = catalog_specs::spec_metadata();
             tool_outcome(
@@ -1591,7 +1642,7 @@ mod tests {
         )
         .unwrap();
         let arr = tools["result"]["tools"].as_array().unwrap();
-        assert_eq!(arr.len(), 38);
+        assert_eq!(arr.len(), 40);
         let unique_names: std::collections::HashSet<&str> = arr.iter().filter_map(|t| t["name"].as_str()).collect();
         assert_eq!(unique_names.len(), arr.len(), "MCP tool names must be strictly unique");
 
@@ -1767,6 +1818,26 @@ mod tests {
         });
         let setb_resp: Value = serde_json::from_str(&handle_message(&setb_call.to_string()).unwrap()).unwrap();
         assert_eq!(setb_resp["result"]["isError"], false);
+
+        let hb_call = json!({
+            "jsonrpc": "2.0",
+            "id": 39,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_history_badge", "arguments": {} }
+        });
+        let hb_resp: Value = serde_json::from_str(&handle_message(&hb_call.to_string()).unwrap()).unwrap();
+        assert_eq!(hb_resp["result"]["isError"], false);
+
+        let rb_call = json!({
+            "jsonrpc": "2.0",
+            "id": 40,
+            "method": "tools/call",
+            "params": { "name": "slclean_export_rules_badge", "arguments": {} }
+        });
+        let rb_resp: Value = serde_json::from_str(&handle_message(&rb_call.to_string()).unwrap()).unwrap();
+        assert_eq!(rb_resp["result"]["isError"], false);
+        let rb_payload: Value = serde_json::from_str(rb_resp["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(rb_payload["sarif_rule_count"], 15);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
