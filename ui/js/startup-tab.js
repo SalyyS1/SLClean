@@ -98,22 +98,42 @@ function renderStartup() {
   refreshStartupTotals();
 }
 
-function refreshStartupTotals() {
-  let on = 0, stale = 0, broken = 0;
+function computeStartupGradeSummary() {
+  let on = 0, stale = 0, broken = 0, heavy = 0, updater = 0, overheadMs = 0;
   for (const e of startups.values()) {
     if (e.gone) continue;
-    if (e.enabled) on++;
+    const impact = classifyStartupImpact(e);
+    if (e.enabled) {
+      on++;
+      if (impact === "heavy") { heavy++; overheadMs += 1900; }
+      else if (impact === "updater") { updater++; overheadMs += 450; }
+      else if (!e.broken && !e.system) { overheadMs += 180; }
+    }
     if (isStaleStartup(e)) stale++;
     if (e.broken) broken++;
   }
-  $("#start-hero").textContent = startups.size ? String(on) : "—";
+  const penalty = (heavy * 14) + (stale * 8) + (updater * 4) + (broken * 6) + Math.floor(overheadMs / 1500);
+  const score = Math.max(0, Math.min(100, 100 - penalty));
+  const grade = score >= 90 ? "A" : score >= 78 ? "B" : score >= 62 ? "C" : score >= 45 ? "D" : "F";
+  return { on, stale, broken, heavy, updater, overheadMs, score, grade };
+}
+
+function refreshStartupTotals() {
+  const s = computeStartupGradeSummary();
+  $("#start-hero").textContent = startups.size ? String(s.on) : "—";
   if (!startScanning) {
-    $("#start-sub").textContent = startups.size ? t("start.summary", { on, stale, broken }) : t("start.subIdle");
+    const baseText = startups.size ? t("start.summary", { on: s.on, stale: s.stale, broken: s.broken }) : t("start.subIdle");
+    const gradeSuffix = startups.size
+      ? (lang === "vi"
+          ? ` · Ước tính +${(s.overheadMs / 1000).toFixed(1)}s khởi động (Hạng ${s.grade} · ${s.score}/100)`
+          : ` · Est. +${(s.overheadMs / 1000).toFixed(1)}s login overhead (Grade ${s.grade} · ${s.score}/100)`)
+      : "";
+    $("#start-sub").textContent = baseText + gradeSuffix;
   }
   const hidden = [...startups.values()].filter((e) => !e.gone && !startPasses(e)).length;
   $("#start-hint").textContent = hidden ? t("start.hiddenHint", { n: hidden }) : "";
   // Huy hiệu đếm mục hỏng: đó là thứ duy nhất ở tab này cần dọn hẳn.
-  setTabBadge("startup", broken, true);
+  setTabBadge("startup", s.broken, true);
 }
 
 async function scanStartup() {
@@ -206,6 +226,38 @@ if ($("#btn-start-export-html")) {
       }
     } catch (err) {
       toast(String(err));
+    }
+  });
+}
+if ($("#btn-start-export-json")) {
+  $("#btn-start-export-json").addEventListener("click", () => {
+    const summary = computeStartupGradeSummary();
+    const entries = [...startups.values()]
+      .filter((e) => !e.gone)
+      .map((e) => ({
+        name: String(e.name || ""),
+        source: String(e.source || ""),
+        command: String(e.command || ""),
+        enabled: Boolean(e.enabled),
+        impact: classifyStartupImpact(e),
+        broken: Boolean(e.broken),
+        system: Boolean(e.system),
+        stale: isStaleStartup(e),
+      }));
+    const payload = {
+      exported_at: new Date().toISOString(),
+      boot_health_grade: summary.grade,
+      boot_health_score: summary.score,
+      estimated_boot_overhead_ms: summary.overheadMs,
+      enabled_count: summary.on,
+      heavy_impact_count: summary.heavy,
+      stale_count: summary.stale,
+      broken_count: summary.broken,
+      entries,
+    };
+    if (typeof downloadBlob === "function") {
+      downloadBlob("slclean-startup-audit.json", "application/json;charset=utf-8", JSON.stringify(payload, null, 2));
+      toast(lang === "vi" ? "Đã xuất slclean-startup-audit.json" : "Exported slclean-startup-audit.json");
     }
   });
 }
